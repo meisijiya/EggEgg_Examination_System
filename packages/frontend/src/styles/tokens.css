@@ -1,0 +1,114 @@
+/**
+ * 设计令牌 — 雪天 / 蓝天 / 旭日。
+ *
+ * 数据来源：frontend-UI/index.html 第 11-84 行（原 Design Tokens）。
+ * 本文件按 OKLch 定义完整色板，字号 / 圆角 / 阴影 / 动画时长。
+ * 业务样式统一引 var(--xxx)；Element Plus 主题覆盖见 element-overrides.css。
+ */
+:root {
+  /* —— 画布（雪） —— */
+  --bg:           oklch(98.5% 0.006 230);
+  --bg-elev-1:    oklch(99.5% 0.004 230);
+  --surface:      oklch(100% 0 0);
+  --surface-2:    oklch(96.5% 0.008 230);
+  --surface-3:    oklch(93% 0.012 230);
+
+  /* —— 主交互（蓝天） —— */
+  --sky:          oklch(64% 0.12 232);
+  --sky-hover:    oklch(58% 0.13 232);
+  --sky-active:   oklch(50% 0.14 232);
+  --sky-soft:     oklch(96% 0.025 232);
+  --sky-tint:     oklch(90% 0.05 232);
+  --sky-fog:      oklch(82% 0.06 232);
+
+  /* —— 成就高亮（旭日） —— */
+  --sunrise:        oklch(80% 0.10 60);
+  --sunrise-strong: oklch(72% 0.14 50);
+  --sunrise-soft:   oklch(97% 0.03 60);
+  --sunrise-tint:   oklch(92% 0.06 55);
+
+  /* —— 文字（深墨蓝，非纯黑） —— */
+  --fg:        oklch(28% 0.04 250);
+  --fg-2:      oklch(40% 0.03 245);
+  --muted:     oklch(55% 0.02 240);
+  --muted-2:   oklch(68% 0.012 240);
+  --muted-3:   oklch(80% 0.008 235);
+
+  /* —— 边框 / 分隔 —— */
+  --border:        oklch(92% 0.008 230);
+  --border-strong: oklch(85% 0.014 230);
+  --border-soft:   oklch(95.5% 0.005 230);
+
+  /* —— 语义色（状态反馈） —— */
+  --success:       oklch(72% 0.11 158);
+  --success-soft:  oklch(96% 0.03 158);
+  --warning:       oklch(82% 0.12 82);
+  --warning-soft:  oklch(96% 0.04 82);
+  --danger:        oklch(66% 0.15 25);
+  --danger-soft:   oklch(95% 0.04 25);
+  --info:          var(--sky);
+
+  /* —— ECharts 八色序列 —— */
+  --chart-1: oklch(64% 0.12 232);   /* 天空蓝 */
+  --chart-2: oklch(80% 0.10 60);    /* 旭日橙 */
+  --chart-3: oklch(72% 0.11 158);   /* 薄荷绿 */
+  --chart-4: oklch(72% 0.08 290);   /* 薰衣草紫 */
+  --chart-5: oklch(78% 0.10 200);   /* 海雾青 */
+  --chart-6: oklch(76% 0.10 110);   /* 嫩芽绿 */
+  --chart-7: oklch(78% 0.08 340);   /* 樱花粉 */
+  --chart-8: oklch(70% 0.10 30);    /* 落日橘 */
+
+  /* —— 字体 —— */
+  --font-display: "PingFang SC", "Hiragino Sans GB", -apple-system,
+                  BlinkMacSystemFont, "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-body:    "PingFang SC", "Hiragino Sans GB", -apple-system,
+                  BlinkMacSystemFont, "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-mono:    "JetBrains Mono", "IBM Plex Mono", ui-monospace,
+                  "SF Mono", Menlo, Consolas, monospace;
+
+  /* —— 字号（业务档位） —— */
+  --fs-display: 56px;
+  --fs-h1: 32px;
+  --fs-h2: 24px;
+  --fs-h3: 20px;
+  --fs-h4: 17px;
+  --fs-body-lg: 16px;
+  --fs-body: 14px;
+  --fs-caption: 12px;
+  --fs-mono: 13px;
+
+  /* —— 字重 / 行高 —— */
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold: 600;
+  --fw-bold:    700;
+  --lh-tight: 1.25;
+  --lh-snug: 1.45;
+  --lh-base: 1.65;
+
+  /* —— 间距 4 / 8 节奏 —— */
+  --s-1: 4px;  --s-2: 8px;   --s-3: 12px;
+  --s-4: 16px; --s-5: 20px;  --s-6: 24px;
+  --s-7: 28px; --s-8: 32px;  --s-10: 40px;
+  --s-12: 48px; --s-16: 64px; --s-20: 80px;
+
+  /* —— 圆角 —— */
+  --r-xs: 4px;   --r-sm: 6px;
+  --r-md: 10px;  --r-lg: 14px;
+  --r-xl: 20px;  --r-pill: 999px;
+
+  /* —— 阴影（低饱和，不使用纯黑） —— */
+  --shadow-xs: 0 1px 2px oklch(50% 0.02 230 / 0.05);
+  --shadow-sm: 0 2px 6px oklch(50% 0.02 230 / 0.06);
+  --shadow-md: 0 6px 20px oklch(50% 0.02 230 / 0.08);
+  --shadow-lg: 0 16px 40px oklch(50% 0.02 230 / 0.10);
+  --shadow-sky: 0 8px 24px oklch(64% 0.12 232 / 0.22);
+  --shadow-sun: 0 8px 24px oklch(80% 0.10 60 / 0.28);
+
+  /* —— 缓动 / 时长 —— */
+  --ease-out:    cubic-bezier(0.16, 0.84, 0.44, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}

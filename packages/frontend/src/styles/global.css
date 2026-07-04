@@ -1,0 +1,407 @@
+/**
+ * 全局样式 — 业务基础 reset + 排版 + 背景。
+ *
+ * 设计语言：雪天画布 + 蓝天白云分层 + 旭日成就高亮。
+ * 女友使用环境 → 易用 > 漂亮，按钮/输入框统一偏大。
+ *
+ * 设计令牌见 tokens.css，Element Plus 主题覆盖见 element-overrides.css。
+ * 本文件只放 reset、字体、背景、页面通用容器、自定义 .qcard / .option / .btn / .timer / .progress /
+ * .feedback 等视觉元素（与 Element Plus 组件解耦的「画风」类）。
+ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+html,
+body,
+#app {
+  font: 400 var(--fs-body) / var(--lh-base) var(--font-body);
+  color: var(--fg);
+  background:
+    radial-gradient(1200px 800px at 90% -10%, oklch(92% 0.08 60 / 0.45), transparent 60%),
+    radial-gradient(900px 600px at -10% 5%, oklch(88% 0.08 232 / 0.55), transparent 65%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-elev-1) 100%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  color: var(--fg);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+}
+
+code, pre {
+  font-family: var(--font-mono);
+}
+
+button { font: inherit; cursor: pointer; }
+
+a {
+  color: var(--sky);
+  text-decoration: none;
+}
+a:hover { color: var(--sky-hover); }
+
+::selection { background: var(--sky-soft); color: var(--sky-active); }
+
+/* ============================================================
+ * 页面通用 — 与 spec 一致
+ * ========================================================== */
+
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-4);
+  width: 100%;
+}
+
+.section-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-6);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: var(--s-4);
+}
+
+.hero { padding: var(--s-12) 0 var(--s-10); text-align: center; }
+.hero h1 {
+  font: var(--fw-bold) clamp(36px, 5vw, var(--fs-display)) / 1.2 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  margin-bottom: var(--s-3);
+}
+.hero .lede {
+  color: var(--muted);
+  font-size: var(--fs-body-lg);
+  max-width: 720px;
+  margin: 0 auto var(--s-6);
+  line-height: var(--lh-snug);
+}
+.hero .lede strong { color: var(--sky-active); font-weight: var(--fw-semibold); }
+.hero-sub { color: var(--muted); font-size: var(--fs-body-lg); margin: var(--s-2) 0 0; }
+
+/* ============================================================
+ * pill / tag — 状态标签
+ * ========================================================== */
+
+.pill-row { display: flex; flex-wrap: wrap; gap: var(--s-2); justify-content: center; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  font: 500 var(--fs-caption) / 1 var(--font-body);
+  color: var(--fg-2);
+  box-shadow: var(--shadow-xs);
+}
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sky); }
+.pill.sun .dot { background: var(--sunrise); }
+.pill.cloud .dot { background: var(--muted-2); }
+.pill.mint .dot { background: var(--success); }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-sm);
+  font: 500 var(--fs-caption) / 1.6 var(--font-body);
+  background: var(--surface-2);
+  color: var(--fg-2);
+}
+.tag.sky { background: var(--sky-soft); color: var(--sky-active); }
+.tag.sun { background: var(--sunrise-soft); color: var(--sunrise-strong); }
+.tag.success { background: var(--success-soft); color: var(--success); }
+.tag.warning { background: var(--warning-soft); color: oklch(50% 0.12 82); }
+.tag.danger { background: var(--danger-soft); color: var(--danger); }
+.tag .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ============================================================
+ * 按钮 — 业务自绘（不依赖 Element Plus button 主题）
+ * 与 Element Plus 共存：业务按钮优先用 btn-*；Element Plus 用 el-button。
+ * ========================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  height: 36px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-md);
+  font: 500 var(--fs-body) / 1 var(--font-body);
+  border: 1px solid transparent;
+  transition: all var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+  user-select: none;
+  background: transparent;
+  color: var(--fg);
+}
+.btn:active { transform: translateY(0.5px); }
+.btn:focus-visible { outline: 3px solid var(--sky-soft); outline-offset: 2px; }
+.btn-primary { background: var(--sky); color: white; box-shadow: var(--shadow-xs); }
+.btn-primary:hover { background: var(--sky-hover); box-shadow: var(--shadow-sky); }
+.btn-primary:active { background: var(--sky-active); }
+.btn-sun { background: var(--sunrise); color: white; box-shadow: var(--shadow-xs); }
+.btn-sun:hover { background: var(--sunrise-strong); box-shadow: var(--shadow-sun); }
+.btn-ghost { background: transparent; color: var(--sky); border-color: var(--sky-fog); }
+.btn-ghost:hover { background: var(--sky-soft); border-color: var(--sky); }
+.btn-soft { background: var(--sky-soft); color: var(--sky-active); }
+.btn-soft:hover { background: var(--sky-tint); }
+.btn-plain { background: var(--surface); color: var(--fg-2); border-color: var(--border); }
+.btn-plain:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { background: oklch(60% 0.16 25); }
+.btn-link { background: transparent; color: var(--sky); padding: 0 var(--s-2); height: auto; }
+.btn-link:hover { color: var(--sky-hover); text-decoration: underline; }
+.btn-sm { height: 28px; padding: 0 var(--s-3); font-size: var(--fs-caption); }
+.btn-lg { height: 44px; padding: 0 var(--s-6); font-size: var(--fs-body-lg); }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.btn-block { width: 100%; }
+
+/* ============================================================
+ * 表单 — 自绘输入/选择
+ * ========================================================== */
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label {
+  font: 500 var(--fs-caption) / 1 var(--font-body);
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  padding: 0 var(--s-3);
+  height: 36px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--fg);
+  font: 400 var(--fs-body) / 1 var(--font-body);
+  transition: border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.textarea {
+  padding: var(--s-3);
+  height: auto;
+  min-height: 88px;
+  resize: vertical;
+  line-height: var(--lh-snug);
+}
+.input:hover,
+.textarea:hover,
+.select:hover { border-color: var(--border-strong); }
+.input:focus,
+.textarea:focus,
+.select:focus { outline: none; border-color: var(--sky); box-shadow: 0 0 0 3px var(--sky-soft); }
+.input::placeholder { color: var(--muted-2); }
+
+/* ============================================================
+ * KPI / Stat
+ * ========================================================== */
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  box-shadow: var(--shadow-xs);
+}
+.stat .label {
+  font: 500 var(--fs-caption) / 1 var(--font-body);
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.stat .value {
+  font: 700 28px / 1 var(--font-display);
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+.stat .delta { font: 500 var(--fs-caption) / 1 var(--font-body); color: var(--success); }
+.stat .delta.down { color: var(--danger); }
+
+/* ============================================================
+ * 题目卡（QCard） — ExamPlay / ExamResult 共用
+ * ========================================================== */
+
+.qcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: var(--s-8);
+  box-shadow: var(--shadow-md);
+  max-width: 720px;
+  margin: 0 auto var(--s-4);
+}
+.qcard .meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s-5);
+  font: 500 var(--fs-caption) / 1 var(--font-mono);
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.qcard .meta .type { color: var(--sky-active); }
+
+.qcard .stem {
+  font: 600 22px / 1.5 var(--font-display);
+  color: var(--fg);
+  margin-bottom: var(--s-6);
+  letter-spacing: -0.005em;
+  white-space: pre-wrap;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  cursor: pointer;
+  margin-bottom: var(--s-3);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.option:hover { border-color: var(--sky-fog); background: var(--sky-soft); }
+.option .letter {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: 600 var(--fs-body) / 1 var(--font-mono);
+  flex-shrink: 0;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.option .text { flex: 1; color: var(--fg); font-size: var(--fs-body-lg); }
+.option.selected { border-color: var(--sky); background: var(--sky-soft); }
+.option.selected .letter { background: var(--sky); color: white; }
+.option.correct { border-color: var(--success); background: var(--success-soft); }
+.option.correct .letter { background: var(--success); color: white; }
+.option.wrong { border-color: var(--danger); background: var(--danger-soft); }
+.option.wrong .letter { background: var(--danger); color: white; }
+.option.readonly { cursor: default; }
+.option .mark { margin-left: auto; font-size: 18px; font-weight: 700; }
+
+/* ============================================================
+ * Timer — 答题页顶部倒计时
+ * ========================================================== */
+
+.timer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  background: var(--sunrise-soft);
+  color: var(--sunrise-strong);
+  border-radius: var(--r-pill);
+  font: 600 var(--fs-body) / 1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.timer.urgent {
+  background: var(--danger-soft);
+  color: var(--danger);
+  animation: qcard-pulse 1.4s infinite;
+}
+.timer.warn { background: var(--warning-soft); color: oklch(50% 0.12 82); }
+.timer.safe { background: var(--success-soft); color: var(--success); }
+
+@keyframes qcard-pulse {
+  50% { transform: scale(1.04); }
+}
+
+/* ============================================================
+ * Progress — 答题进度（蓝→橙渐变）
+ * ========================================================== */
+
+.progress {
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.progress > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--sky), var(--sunrise));
+  border-radius: var(--r-pill);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* ============================================================
+ * Feedback — 答题反馈块
+ * ========================================================== */
+
+.feedback {
+  margin-top: var(--s-5);
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-md);
+  background: var(--sky-soft);
+  border-left: 3px solid var(--sky);
+  color: var(--fg-2);
+  font-size: var(--fs-body);
+}
+.feedback.ok { background: var(--success-soft); border-color: var(--success); }
+.feedback.no { background: var(--danger-soft); border-color: var(--danger); }
+.feedback .title { font-weight: var(--fw-semibold); margin-bottom: 4px; }
+
+/* ============================================================
+ * Note / Do-Dont — 信息块
+ * ========================================================== */
+
+.note {
+  background: var(--sky-soft);
+  border-left: 3px solid var(--sky);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  font-size: var(--fs-body);
+}
+.note strong { color: var(--sky-active); }
+.note.sun { background: var(--sunrise-soft); border-color: var(--sunrise); }
+.note.sun strong { color: var(--sunrise-strong); }
+
+/* ============================================================
+ * 性别 / 关键按钮（女友使用环境优先 — 主行动一致用一种强调色）
+ * ========================================================== */
+.el-button--primary { font-weight: var(--fw-medium); }
+.el-button--danger { font-weight: var(--fw-medium); }
+
+/* ============================================================
+ * 响应式断点
+ * ========================================================== */
+@media (max-width: 720px) {
+  .page-container { padding: var(--s-4) var(--s-3); }
+  .section-card { padding: var(--s-4); }
+  .qcard { padding: var(--s-6) var(--s-5); }
+  .qcard .stem { font-size: 20px; }
+  .hero { padding: var(--s-10) 0 var(--s-8); }
+  .hero h1 { font-size: clamp(28px, 7vw, 40px); }
+}

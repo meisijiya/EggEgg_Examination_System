@@ -1,0 +1,59 @@
+# ===============================================
+# Docker build context exclusions
+# 减少 build context 体积 + 避免泄露 .env / .venv 等本地状态
+# ===============================================
+
+# Git / 元数据
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Python — 避免本地 venv / cache 污染镜像
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.coverage
+**/htmlcov/
+
+# Node — 前端依赖应通过 pnpm install 重新装
+**/node_modules/
+
+# 测试产物
+**/.tox/
+
+# 文档 / openspec（不影响运行）
+docs/
+openspec/
+
+# 资料目录 — 大文件 + 不入 git
+财务管理资料/
+资料/
+
+# 中间预处理产物（PDF 原始文件）
+data/raw/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Secrets — 强制从 env_file 注入，绝不打包进镜像
+.env
+.env.*
+!.env.example
+
+# 运行时日志
+**/logs/
+**/*.log
+
+# 注意：保留以下 (Dockerfile 显式 COPY)
+#   - packages/backend/    （后端源码 + pyproject.toml + uv.lock）
+#   - packages/frontend/    （前端源码；dist/ 可空）
+#   - data/parsed/ data/distributions/ data/qa/   （题库 metadata）
+#   - .env.example         （文档参考）

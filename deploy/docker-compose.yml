@@ -1,0 +1,86 @@
+# ===============================================
+# Finance Exam System — Docker Compose (单容器部署)
+# ===============================================
+#
+# 部署前提:
+#   1. 云服务器已装 Docker 24+ 与 Docker Compose v2
+#   2. 反代前置: 云服务商 (阿里云 SLB / 腾讯云 CLB / Cloudflare) 已终止 TLS
+#   3. .env 已就绪 (从 .env.example 复制并填入真实 secrets)
+#   4. 数据已就绪: data/final/finance.db (从 preprocessor 跑出来)
+#
+# 启动命令 (从项目根):
+#   docker compose -f deploy/docker-compose.yml --env-file .env up -d
+#
+# 查看日志:
+#   docker compose -f deploy/docker-compose.yml logs -f
+#
+# 升级:
+#   git pull && docker compose -f deploy/docker-compose.yml build && \
+#   docker compose -f deploy/docker-compose.yml up -d
+
+services:
+  finance-exam:
+    # 镜像构建上下文与 Dockerfile 位置
+    build:
+      context: ..            # 项目根 (相对 deploy/)
+      dockerfile: deploy/Dockerfile
+    image: finance-exam-system:latest
+
+    container_name: finance-exam-system
+
+    # 端口: 仅暴露给云内网回环 (假设反代在 127.0.0.1:8000 / 内网 SLB)
+    # 若直暴露公网, 务必配合防火墙或云安全组限制源 IP
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    # 数据持久化 — 把宿主 data/ 挂到容器 /app/data
+    # 容器内:
+    #   /app/data/final/finance.db   — 题库 (运行时只读)
+    #   /app/data/app.db             — 应用库 (考试记录 / 用户进度, 写入)
+    # 备份策略: 定期 tar czf app.db.tgz data/app.db + 同步到 OSS
+    volumes:
+      - ../data:/app/data:rw
+
+    # 环境变量 — 从项目根 .env 读取
+    # 该文件不入 git; 部署前 cp .env.example .env 再填真实值
+    env_file:
+      - ../.env
+
+    # 重启策略: 除非手动 docker compose down, 否则自动重启
+    restart: unless-stopped
+
+    # 资源限制 (1 vCPU / 1 GB 内存的轻量服务器调优)
+    # FastAPI + uvicorn 单 worker 默认 ~150 MB; 留 headroom 给 SQLite + OS
+    deploy:
+      resources:
+        limits:
+          cpus: "0.8"
+          memory: 768M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+
+    # 健康检查 — 30s 间隔, 失败 3 次标 unhealthy
+    # Docker 据此触发 restart unless-stopped 重启容器
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s  # 启动后给 alembic 迁移 + uvicorn 预热留时间
+
+    # 日志驱动 — json-file + 限制单文件 10M 最多 3 个文件
+    # 防止磁盘被日志填满 (云服务器 1GB 内存节点)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # 安全加固
+    security_opt:
+      - no-new-privileges:true
+
+    # 时区 — 设为上海, 时间戳与日志与中文用户一致
+    environment:
+      - TZ=Asia/Shanghai

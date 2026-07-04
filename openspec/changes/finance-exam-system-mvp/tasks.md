@@ -2,26 +2,26 @@
 
 ## Phase 1 — 后端 MVP（highest priority）
 
-- [ ] T1.1 项目结构 — `packages/backend/` 初始化（pyproject.toml / app/ / alembic/ / tests/）
-- [ ] T1.2 配置层 — `.env.example` 完善；pydantic-settings 读环境变量
-- [ ] T1.3 数据访问层 — SQLAlchemy 2 models（subjects / chapters / questions）+ 异步 session
-- [ ] T1.4 Auth 模块 — 单密码 JWT（`/auth/login`），独立 admin 密码
-- [ ] T1.5 出题 Service — `paper_assembler.py`（按 spec §6.2 章节×题型×难度三维加权抽样）
-- [ ] T1.6 判分 Service — `grader.py`（客观对照 + 关键词覆盖率，按 spec §6.4）
-- [ ] T1.7 数据模型补充 — `exam_attempts` + `attempt_answers` 表 + Alembic 迁移
-- [ ] T1.8 测试 — pytest 全覆盖：解析器 / 抽题算法 / 判分阈值 / API 集成（mock LLM）
-- [ ] T1.9 OpenAPI 文档 — FastAPI 自动生成 + README 引用
+- [x] T1.1 项目结构 — `packages/backend/` 初始化（pyproject.toml / app/ / alembic/ / tests/）
+- [x] T1.2 配置层 — `.env.example` 完善；pydantic-settings 读环境变量
+- [x] T1.3 数据访问层 — SQLAlchemy 2 models（subjects / chapters / questions）+ 异步 session
+- [x] T1.4 Auth 模块 — 单密码 JWT（`/auth/login`），独立 admin 密码
+- [x] T1.5 出题 Service — `paper_assembler.py`（按 spec §6.2 章节×题型×难度三维加权抽样）
+- [x] T1.6 判分 Service — `grader.py`（客观对照 + 关键词覆盖率，按 spec §6.4）
+- [x] T1.7 数据模型补充 — `exam_attempts` + `attempt_answers` 表 + Alembic 迁移
+- [x] T1.8 测试 — pytest 全覆盖：解析器 / 抽题算法 / 判分阈值 / API 集成（mock LLM）
+- [x] T1.9 OpenAPI 文档 — FastAPI 自动生成 + README 引用
 
 ## Phase 2 — Web API 端点
 
-- [ ] T2.1 `POST /auth/login` — 单密码 JWT
-- [ ] T2.2 `POST /exams/start` — 启动模拟考（algorithm→paper）+ 写 exam_attempts
-- [ ] T2.3 `GET /exams/{id}` — 拉取试卷（断线重连）
-- [ ] T2.4 `POST /exams/{id}/submit` — 交卷 + 判分 pipeline（同步等待 ≤ 2s）
-- [ ] T2.5 `GET /exams/{id}/result` — 完整成绩详情（含每题评语）
-- [ ] T2.6 `GET /dashboard` — 历次成绩 + 趋势 + 章节雷达数据
-- [ ] T2.7 `POST /exams/{id}/explain` — 流式讲解（SSE，DeepSeek client）
-- [ ] T2.8 `GET /admin/review/queue` + `POST /admin/review/questions/{id}` — 开发期人工 review（独立鉴权）
+- [x] T2.1 `POST /auth/login` — 单密码 JWT
+- [x] T2.2 `POST /exams/start` — 启动模拟考（algorithm→paper）+ 写 exam_attempts
+- [x] T2.3 `GET /exams/{id}` — 拉取试卷（断线重连）
+- [x] T2.4 `POST /exams/{id}/submit` — 交卷 + 判分 pipeline（同步等待 ≤ 2s）
+- [x] T2.5 `GET /exams/{id}/result` — 完整成绩详情（含每题评语）
+- [x] T2.6 `GET /dashboard` — 历次成绩 + 趋势 + 章节雷达数据
+- [x] T2.7 `POST /exams/{id}/explain` — 占位 stub（DeepSeek 客户端待后续接入）
+- [x] T2.8 `GET /admin/review/queue` + `POST /admin/review/questions/{id}` — 开发期人工 review（独立鉴权）
 
 ## Phase 3 — 前端 SPA
 

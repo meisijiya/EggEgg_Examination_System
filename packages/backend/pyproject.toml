@@ -1,0 +1,23 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.18.5",
+    "fastapi>=0.139.0",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
+    "pytest>=8",
+    "pytest-asyncio>=1.4.0",
+    "sqlalchemy[asyncio]>=2.0.51",
+    "uvicorn>=0.50.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio",
+    "pytest-cov",
+]

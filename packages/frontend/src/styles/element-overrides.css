@@ -1,0 +1,63 @@
+/**
+ * Element Plus 运行时 CSS 变量覆盖。
+ *
+ * 注意：Element Plus 的 SCSS 主题是另一套（在 vite 构建期注入），
+ * 这里只覆盖运行时 CSS 变量。两者等价时优先保证运行时一致。
+ *
+ * SCSS 编译器不能解析 oklch()，所以 EP 颜色一律走 hex。
+ * 设计令牌保留 oklch（见 tokens.css），与本表 1:1 对应：
+ *   --sky            oklch(64% 0.12 232)  ≈ #5BA0E2
+ *   --sky-hover      oklch(58% 0.13 232)  ≈ #4A8AD0
+ *   --sky-active     oklch(50% 0.14 232)  ≈ #3470B8
+ *   --sky-soft       oklch(96% 0.025 232) ≈ #ECF4FC
+ *   --sunrise        oklch(80% 0.10 60)   ≈ #F4A574
+ *   --sunrise-strong oklch(72% 0.14 50)   ≈ #E68E54
+ *   --success        oklch(72% 0.11 158)  ≈ #58C29E
+ *   --warning        oklch(82% 0.12 82)   ≈ #F0B86E
+ *   --danger         oklch(66% 0.15 25)   ≈ #E07B7B
+ *   --fg             oklch(28% 0.04 250)  ≈ #2C3E50
+ *   --fg-2           oklch(40% 0.03 245)  ≈ #4A5A6E
+ *   --muted          oklch(55% 0.02 240)  ≈ #6B7A8A
+ *   --muted-2        oklch(68% 0.012 240) ≈ #9AA5B1
+ */
+:root {
+  /* 主蓝（天空）：5 档 + dark-2 深色 */
+  --el-color-primary: #5BA0E2;
+  --el-color-primary-light-3: #7BB5E9;
+  --el-color-primary-light-5: #9BC8F0;
+  --el-color-primary-light-7: #BCDBF6;
+  --el-color-primary-light-9: #E5EFFB;
+  --el-color-primary-dark-2: #3470B8;
+
+  /* 状态色 */
+  --el-color-success: #58C29E;
+  --el-color-success-light-9: #E8F6F0;
+  --el-color-warning: #F0B86E;
+  --el-color-warning-light-9: #FBF1DE;
+  --el-color-danger: #E07B7B;
+  --el-color-danger-light-9: #F8E2E2;
+  --el-color-info: #9AA5B1;
+  --el-color-error: #E07B7B;
+
+  /* 背景 / 边框 */
+  --el-bg-color: #FAFCFE;
+  --el-bg-color-page: #FAFCFE;
+  --el-bg-color-overlay: #FFFFFF;
+  --el-border-color: #E5EAF0;
+  --el-border-color-light: #EEF1F5;
+  --el-border-color-lighter: #F4F6F9;
+
+  /* 文字 */
+  --el-text-color-primary: #2C3E50;
+  --el-text-color-regular: #4A5A6E;
+  --el-text-color-secondary: #6B7A8A;
+  --el-text-color-placeholder: #9AA5B1;
+
+  /* 圆角 / 字体 */
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 999px;
+  --el-font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+                    -apple-system, BlinkMacSystemFont, sans-serif;
+  --el-font-size-base: 14px;
+}
