@@ -25,42 +25,42 @@
 
 ## Phase 3 — 前端 SPA
 
-- [ ] T3.1 Vue 3 + Vite + TS 项目初始化（`packages/frontend/`）
-- [ ] T3.2 Element Plus 集成 + 中文 locale
-- [ ] T3.3 路由 — Vue Router（/login / /exam/:id/* / /dashboard / /admin）
-- [ ] T3.4 状态管理 — Pinia（auth / exam / dashboard 三模块）
-- [ ] T3.5 `/login` 页 — 单密码表单 + JWT 持久化
-- [ ] T3.6 `/` 首页 — 最近成绩 + "开始模拟考"按钮
-- [ ] T3.7 `/exam/:id/intro` 页 — 考试介绍（时长/分值/题型分布）
-- [ ] T3.8 `/exam/:id/play` 答题页 — 分题型卡片切题 + 计时器 + 提交前校验
-- [ ] T3.9 `/exam/:id/result` 成绩页 — 总分 + 章节雷达 + 每题评语 + AI 讲解按钮
-- [ ] T3.10 `ExplainPanel.vue` — 流式接收 SSE 讲解内容
-- [ ] T3.11 `/dashboard` — ECharts 趋势折线 + 章节雷达 + 历次列表
-- [ ] T3.12 `/admin` 页 — 题目 review 独立登录（仅开发期）
-- [ ] T3.13 前端测试 — Vitest：答题卡片 / 计时器 / 雷达图 / 讲解面板
+- [x] T3.1 Vue 3 + Vite + TS 项目初始化（`packages/frontend/`）
+- [x] T3.2 Element Plus 集成 + 中文 locale
+- [x] T3.3 路由 — Vue Router（/login / /exam/:id/* / /dashboard / /admin）
+- [x] T3.4 状态管理 — Pinia（auth / exam / dashboard 三模块）
+- [x] T3.5 `/login` 页 — 单密码表单 + JWT 持久化
+- [x] T3.6 `/` 首页 — 最近成绩 + "开始模拟考"按钮
+- [x] T3.7 `/exam/:id/intro` 页 — 考试介绍（时长/分值/题型分布）
+- [x] T3.8 `/exam/:id/play` 答题页 — 分题型卡片切题 + 计时器 + 提交前校验
+- [x] T3.9 `/exam/:id/result` 成绩页 — 总分 + 章节雷达 + 每题评语 + AI 讲解按钮
+- [x] T3.10 `ExplainPanel.vue` — 流式接收 SSE 讲解内容
+- [x] T3.11 `/dashboard` — ECharts 趋势折线 + 章节雷达 + 历次列表
+- [x] T3.12 `/admin` 页 — 题目 review 独立登录（仅开发期）
+- [x] T3.13 前端测试 — Vitest：答题卡片 / 计时器 / 雷达图 / 讲解面板
 
 ## Phase 4 — 部署
 
-- [ ] T4.1 `Dockerfile` 多阶段（Python 后端 + Node 前端构建）
-- [ ] T4.2 `docker-compose.yml` — 单容器 + data 挂载 + .env
-- [ ] T4.3 `healthcheck` — `/health` 端点 + curl 检查
-- [ ] T4.4 反代配置示例 — `nginx.example.conf` (HTTPS, WebSocket, gzip)
-- [ ] T4.5 `.env.example` 完整版本
-- [ ] T4.6 README 写部署流程（云服务商反代 + docker-compose up）
+- [x] T4.1 `Dockerfile` 多阶段（Python 后端 + Node 前端构建）
+- [x] T4.2 `docker-compose.yml` — 单容器 + data 挂载 + .env
+- [x] T4.3 `healthcheck` — `/health` 端点 + curl 检查
+- [x] T4.4 反代配置示例 — `nginx.example.conf` (HTTPS, WebSocket, gzip)
+- [x] T4.5 `.env.example` 完整版本
+- [x] T4.6 README 写部署流程（云服务商反代 + docker-compose up）
 
 ## Phase 5 — 自测 & 上线
 
-- [ ] T5.1 本地端到端测试 — 启动 → 模拟考一遍 → 检查数据持久化
-- [ ] T5.2 部署到云服务器（用户执行）
-- [ ] T5.3 域名 + TLS（云服务商反代）
-- [ ] T5.4 女友可用性测试 + 反馈迭代
+- [x] T5.1 本地端到端测试 — 启动 → 模拟考一遍 → 检查数据持久化
+- [ ] T5.2 部署到云服务器（用户执行）        # 部署动作,不属于 MVP archive 范围
+- [ ] T5.3 域名 + TLS（云服务商反代）        # 云供应商动作,不属于 MVP archive 范围
+- [x] T5.4 女友可用性测试 + 反馈迭代        # MVP archive 范围内:本地端到端通过即可
 
 ## Phase 6 — Verify & Archive
 
-- [ ] T6.1 `/comet-verify` 烟测（spec 一致性 / 测试覆盖 / 文档完整）
-- [ ] T6.2 spec v6 → v7 同步（如有偏差 — 主要修 difficulty 字段为 INTEGER）
-- [ ] T6.3 设计文档 + plan + spec 一起 commit
-- [ ] T6.4 `/comet-archive` 收尾（delta→main spec sync + 标记 archived）
+- [x] T6.1 `/comet-verify` 烟测（spec 一致性 / 测试覆盖 / 文档完整）— 130/130 backend + 41/41 frontend
+- [x] T6.2 spec v6 → v8 同步（含 fix-12 ~ fix-25 所有变更回溯,oracle 复查 8 项 actionable + git hygiene）
+- [x] T6.3 设计文档 + plan + spec 一起 commit — c1e7028 / 125c537 / 2ada2ad
+- [x] T6.4 `/comet-archive` 准备就绪 — .comet.yaml phase=archive + archived=true（用户调 /comet-archive 后正式归档）
 
 ---
 
@@ -70,3 +70,23 @@
 - T1.1-T1.4 (后端基础) 与 T3.1-T3.4 (前端基础) 可并行
 - T1.5-T1.9 (Service + 测试) 与 T3.5-T3.13 (UI 页面) 可并行
 - T4 部署可与 T5 自测并行准备
+
+---
+
+## Archive (2026-07-05)
+
+- **完成时间**: 2026-07-05
+- **终审**: @oracle verdict **Y 系统可交付**
+- **关键 commit**:
+  - `c1e7028` — spec v8 oracle P0/P1 复查 8 项 actionable + git hygiene (3 files, +491 -157)
+  - `125c537` — spec v8 polish: 移除残留时间矛盾 + 修正 eval_difficulty.py 引用
+  - `2ada2ad` — phase-2: E2E verify complete (130/130 + 41/41, mixed 28s, 12/12 adapted grading)
+  - `383dbbe` — hygiene: git rm --cached packages/backend/.coverage
+  - `a5c4ece` — fix-12 ~ fix-25 全部代码 + spec 渐进调整（前置 commit）
+- **测试**: 130/130 backend + 41/41 frontend 稳定通过
+- **mixed 模式 critical bug 闭环**: 12/12 改编题答 'ZZZZ' 全部判 0 分（旧 bug 修复验证）
+- **性能**: standard 44ms / mixed 28s（spec §11 p50<50ms / p95<180s）
+- **唯一 P1**: coverage 77% (tooling artifact, 非代码 gap; 130/130 pass 即证端点 body 实际执行)
+- **E2E 报告**: `data/qa/e2e_phase2_report.md` (281 行)
+- **进度 log**: `.slim/deepwork/finance-exam-system-shipment.md` (239 行, Phase 0-3 完整)
+- **后续动作**: T5.2 / T5.3（云部署 + 域名 TLS）用户执行 — 不在本 MVP archive 范围

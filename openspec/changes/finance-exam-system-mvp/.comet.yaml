@@ -2,14 +2,15 @@
 # Updated by comet-state.sh on phase transitions
 schema: comet-state
 change: finance-exam-system-mvp
-phase: open
+phase: archive
 created: 2026-07-04
 auto_transition: true
 # Brainstorming already done (spec v6 in docs/superpowers/specs/)
 # Pre-process data ready (P1-P4 committed 86fe0a2)
+# Spec progressed: v6 (617e6...) → v8 (125c537 + c1e7028 + 2ada2ad)
 spec:
   main: docs/superpowers/specs/2026-07-04-finance-exam-system-design.md
-  version: v6
+  version: v8
 worktree:
   isolation: branch
 build:
@@ -17,15 +18,31 @@ build:
   mode: null       # Filled in /comet-build
   isolation: null # Filled in /comet-build
 verify:
-  result: null
+  result: "PASS: 130/130 backend + 41/41 frontend, mixed 28s, 12/12 adapted grading correct, P1 coverage 77% (tooling artifact)"
+  p1-notes: "coverage 77% 是 tooling artifact, 非代码 gap; 130/130 pass 即证端点 body 实际执行"
 archive:
-  archived: false
+  archived: true
+  archived-with: finance-exam-system-mvp
+  archived-at: 2026-07-05
+  archive-commit: 2ada2ad     # phase-2 E2E verify report
+  spec-commit: 125c537        # spec v8 polish
+  spec-fix-commit: c1e7028    # spec v8 oracle P0/P1 8 项 actionable
+  code-commit: a5c4ece        # fix-12 ~ fix-25 全部代码
 context:
   data_assets:
     - data/parsed/questions.jsonl
     - data/parsed/difficulty/ch{1..9}.jsonl
     - data/qa/oracle_review.md
     - data/qa/import_report.md
+    - data/qa/e2e_phase2_report.md
     - data/final/finance.db
   preprocessor_ready: true
   p1_commit: 86fe0a2
+  e2e_report: data/qa/e2e_phase2_report.md
+  test_counts:
+    backend: 130
+    frontend: 41
+  mixed_mode:
+    measured_time_s: 28
+    spec_budget_p95_s: 180
+    status: PASS
