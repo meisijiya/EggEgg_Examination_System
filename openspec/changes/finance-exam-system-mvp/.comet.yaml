@@ -1,0 +1,31 @@
+# Comet state file for finance-exam-system-mvp change
+# Updated by comet-state.sh on phase transitions
+schema: comet-state
+change: finance-exam-system-mvp
+phase: open
+created: 2026-07-04
+auto_transition: true
+# Brainstorming already done (spec v6 in docs/superpowers/specs/)
+# Pre-process data ready (P1-P4 committed 86fe0a2)
+spec:
+  main: docs/superpowers/specs/2026-07-04-finance-exam-system-design.md
+  version: v6
+worktree:
+  isolation: branch
+build:
+  pause: null
+  mode: null       # Filled in /comet-build
+  isolation: null # Filled in /comet-build
+verify:
+  result: null
+archive:
+  archived: false
+context:
+  data_assets:
+    - data/parsed/questions.jsonl
+    - data/parsed/difficulty/ch{1..9}.jsonl
+    - data/qa/oracle_review.md
+    - data/qa/import_report.md
+    - data/final/finance.db
+  preprocessor_ready: true
+  p1_commit: 86fe0a2
