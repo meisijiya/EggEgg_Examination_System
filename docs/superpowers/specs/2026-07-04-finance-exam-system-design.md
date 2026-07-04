@@ -234,7 +234,7 @@
 
 **质量机制落地的代码职责边界**（v8 增量规范）：
 - 阶段 ② PDF→jsonl / ③ 分布表 / ④ 强质量校验：**全部不调 LLM**，由 `packages/preprocessor/` 中的纯 Python 脚本完成
-- 阶段 ②.5 难度评估：`packages/preprocessor/scripts/eval_difficulty.py` 单次 LLM 批跑 + dump 到 `data/parsed/difficulty/ch{1..9}.jsonl`
+- 阶段 ②.5 难度评估：单次 LLM 批跑 + dump 到 `data/parsed/difficulty/ch{1..9}.jsonl`（v8 9 个章节 jsonl 已落地,见 §15 目录树）
 - 阶段 ⑤ 三轮迭代 + 用户人工：`/admin` 路由 + `data/qa/review_iter_*.md` 文档沉淀
 
 ### 5.3 运行时抽样算法（**章节 × 题型 × 难度** 三维加权随机）
@@ -365,8 +365,9 @@ async def assemble_paper_async(
 
     - mode='standard' → 走原 assemble() 路径,零 LLM
     - mode='mixed'    → 跑标准抽样 + 选 ~30% 槽位做 AI 改编(
-                          adapt_service;并发 by asyncio.Semaphore;
-                          实测 worst case 30-200s)
+                          adapt_service;并发 by asyncio.gather +
+                          Semaphore(12);耗时以 §11 v8 性能基线表为准,
+                          worst case < 300s)
     """
 ```
 
