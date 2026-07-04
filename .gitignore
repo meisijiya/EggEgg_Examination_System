@@ -18,6 +18,13 @@ build/
 .mypy_cache/
 htmlcov/
 
+# Coverage (cover.py / coverage.py 产物 — com 模块切换可用)
+*.coverage
+.coverage
+.coverage.*
+*,cover
+coverage.json
+
 # IDE / Editor
 .idea/
 .vscode/

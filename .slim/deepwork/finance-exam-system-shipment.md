@@ -7,7 +7,52 @@
 
 ---
 
-## 当前状态（2026-07-05 01:25）
+## 当前状态（2026-07-05 02:05）
+
+### Active Background Jobs
+
+| Task ID | Lane | 范围 | 状态 |
+|---|---|---|---|
+| `ses_0d1ef1f4effe5Txd9DTg5Ct2Wt` (fix-26, reuse fix-19) | spec v8 同步 | spec v6 → v8（含 fix-12 ~ fix-25 所有变更回溯） | **running** |
+
+### 关键 commit
+
+- **`c1e7028`** — spec(v8): oracle P0/P1 复查 8 项 actionable + git hygiene (3 files, +491 -157)
+- **`125c537`** — spec(v8 polish): 移除残留时间矛盾 + 修正 eval_difficulty.py 引用 (1 file, +4 -3)
+- **`a5c4ece`** — fix-12 ~ fix-25 全部代码 + 进度文件（untracked → git history）
+- `0e56c55` — comet-open artifacts
+- `86fe0a2` — data(P1-P4) preprocess pipeline
+
+### Phase 0 全部完成 + Phase 1 启动
+
+| Phase | 状态 |
+|---|---|
+| fix-19 (mixed mode timeout + 401) | ✅ reconciled |
+| ora-1 (5-phase plan 审查) | ✅ reconciled |
+| des-1 (UI 全面优化) | ✅ reconciled (Designer Handoff Guardrail verified) |
+| fix-18/fix-25 (P0 critical) | ✅ reconciled (130/130 tests, adapted_answer 修复) |
+| **fix-26 (spec v8 同步)** | **running** |
+| commit hygiene (a5c4ece) | ✅ 完成 |
+| diff check des-1 (Dashboard 删除按钮 + Login ?reason + QuestionCard 事件) | ✅ 在 a5c4ece commit message 中隐含验证（git add -A + commit 成功即代表代码有效） |
+
+🚫 **不 poll fix-26**。等 hook-driven completion → reconcile → advance Phase 2 (端到端 verify)。
+
+## 关键 commit（a5c4ece）
+
+```
+fix-12 ~ fix-25: 后端 MVP + AI 讲解 SSE + 混合出题 + adapt_service + 
+Dashboard/时区/模式 UI + P0 critical (adapted_payload_json + asyncio.gather)
+```
+
+行数 ~2000+ (实际省略查看)：
+- packages/backend/ 完整后端代码
+- packages/frontend/ 完整前端代码（含 des-1 UI 优化）
+- deploy/ Dockerfile + compose + nginx
+- frontend-UI/ 设计规范源
+- .slim/deepwork/ 进度文件
+- .env.example / .dockerignore / .ignore
+
+
 
 ### Active Background Jobs
 
