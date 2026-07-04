@@ -1,0 +1,50 @@
+# Core
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+*.egg
+.venv/
+venv/
+env/
+
+# Build / runtime artifacts
+node_modules/
+dist/
+build/
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+
+# IDE / Editor
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Secrets — DO NOT COMMIT
+.env
+.env.*
+!.env.example
+
+# 运行时数据（由应用重新生成）
+logs/
+*.log
+
+# 资料目录 —— 不入 git
+资料/
+
+# 预处理产物区分：
+#   data/parsed/*.jsonl    入 git（题目，jsonl 可读可 diff）
+#   data/distributions/    入 git（章节×题型 概率配置）
+#   data/qa/*.md           入 git（QA 报告、决策记录）
+#   data/raw/              不入 git（PDF 中间产物，可重生成）
+#   data/final/*.db        不入 git（运行时重生成）
+data/raw/
+data/final/
+# 但保留 parsed / distributions / qa 的显式跟踪
+!data/parsed/
+!data/distributions/
+!data/qa/
