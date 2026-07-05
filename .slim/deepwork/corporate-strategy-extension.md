@@ -116,3 +116,57 @@
 - 题目卡片：`packages/frontend/src/components/QuestionCard.vue`
 - 测试：130 backend + 41 frontend（finance）
 - 远程仓库 URL：**待问用户**（Phase 4 前必填）
+
+---
+
+## Phase 4 final commit 完成
+
+**Commit SHA (代码累计)**: `2d5b3dace1cc71550f7506d33292ef0e9e769596`
+**Commit SHA (archive move)**: `4197da1`
+**Files committed**: 65 (代码累计 commit) + 5 renames (archive commit)
+**Lines added/removed**: 9398 / 435
+**Tests**: 288 backend + 102 frontend
+**Git remote**: `git@github.com:meisijiya/EggEgg_Examination_System.git`
+**Push status**: ✅ OK (两个 commits 都已推送到 `origin/main`)
+**Total tracked files after Phase 4**: 182
+**/comet-archive status**: ✅ archived as `openspec/changes/archive/2026-07-05-finance-exam-system-mvp/`
+
+### Phase 4 完成的关键 actions
+
+1. **`.gitignore` hygiene lock-down** (用户硬约束:`排除敏感`)
+   - 添加 `*.pdf` / `*.docx` / `*.doc` pattern(原始资料)
+   - 添加 `公司战略和风险管理/` 目录排除(`.gitignore` 原本只有 `资料/` 匹配 `财务管理资料/` 后缀,但不匹配 `公司战略和风险管理/`)
+   - 修复前:`git ls-files --others --exclude-standard` 显示 11 source PDFs/docx 在 `公司战略和风险管理/` 会随 `git add -A` 入库
+   - 修复后:0 sensitive files 会在 `git add -A` 时被加入
+   - `.env` / `coverage.json` / `*.coverage` / `data/final/` / `packages/backend/data/*.db` 原本已存在
+
+2. **Git commit hygiene**
+   - `git add -A` 后 verify 0 sensitive files 入库
+   - Multi-fix summary commit 保留 30+ fixes 演进记录(不 squash)
+   - 65 files / 9398 insertions / 435 deletions
+
+3. **Git remote + push**
+   - 添加 `git@github.com:meisijiya/EggEgg_Examination_System.git` 作为 `origin`
+   - `git push -u origin main` clean push,exit=0
+   - `branch 'main' set up to track 'origin/main'`
+
+4. **`/comet-archive` execution**
+   - `openspec list --json` → 1 change: `finance-exam-system-mvp` (42/44 tasks, status: in-progress)
+   - 2 incomplete tasks (T5.2/T5.3) 显式 out-of-MVP-scope (cloud deploy + TLS 是 user/cloud-provider actions)
+   - `openspec archive finance-exam-system-mvp -y` → 成功 archived as `2026-07-05-finance-exam-system-mvp`
+   - 5 files renamed (moved): `.comet.yaml` / `.openspec.yaml` / `design.md` / `proposal.md` / `tasks.md`
+   - Archive move committed as `4197da1` + pushed
+
+### Phase 4 done criteria
+
+- ✅ 所有 30+ fix 累计 commit(`2d5b3da`)
+- ✅ 远程仓库含全部代码(`origin/main` 同步)
+- ✅ 排除敏感 (`.env` / `coverage.json` / `*.pdf` / `*.docx` / `*.coverage` / `finance.db`)
+- ✅ Docker 双层策略落地 (build-time COPY + VOLUME) — 在 `2d5b3da` 内
+- ✅ Memory profile 验证 (85.9MB / 768M 限) — 已在 Phase 3 docs
+- ✅ corp-strat 63 题入 finance.db (10 chapters, 5 题型全覆盖) — 在 `2d5b3da` 内
+- ✅ Phase 0-3 全部 30+ fixes reconciled — `2d5b3da` 累计 commit
+- ✅ 用户硬约束全部满足 (中文+emoji / 函数级注释 / PATH 验证 / ctx7 / 排除敏感 / docker 一键拉起)
+- ✅ `/comet-archive` 真正归档到 `openspec/changes/archive/2026-07-05-finance-exam-system-mvp/`
+
+**Phase 4 final: ✅ DONE — 系统可交付**
