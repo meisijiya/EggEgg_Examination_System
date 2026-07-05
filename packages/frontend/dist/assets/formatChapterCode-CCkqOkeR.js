@@ -1,0 +1,1 @@
+const i={pest:"PEST 分析",corp:"企业战略",empirical:"实证研究结构框架","stab-adapt":"战略稳定性与文化适应性","choice-impl":"战略选择与实施","innovation-subj":"探索战略创新主观题"};function a(t){if(!t)return"";if(/^ch\d+$/.test(t))return`章节 ${t.slice(2)}`;const r=t.match(/^pdf-ch(\d+)$/);if(r)return`PDF 章节 ${r[1]}`;const n=t.match(/^docx-(.+)$/);if(n){const c=n[1];return i[c]??t}return t}export{a as f};

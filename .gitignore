@@ -10,7 +10,7 @@ env/
 
 # Build / runtime artifacts
 node_modules/
-dist/
+/dist/
 build/
 .cache/
 .pytest_cache/

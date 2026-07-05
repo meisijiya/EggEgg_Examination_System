@@ -1,52 +1,27 @@
 # syntax=docker/dockerfile:1.7
 # ===============================================
-# Finance Exam System — 多阶段 Dockerfile
+# Finance Exam System — Python 后端 + 预构建前端
 # ===============================================
-# Stage 1: 前端构建  (node:20-alpine + npm, 与项目 package-lock.json 匹配)
-# Stage 2: Python 后端运行时 (python:3.13-slim + uv)
+# 前端 dist 已本地预构建并 commit 到仓库 (packages/frontend/dist/)
+# Docker 镜像直接从 host COPY, 无需在容器内跑 npm install/build
+# ===============================================
+# Stage: Python 后端运行时 (python:3.13-slim + uv)
 #
 # 设计要点:
-# - 前端 packages/frontend/ 缺失时, Stage 1 仍能完成 (输出空 dist 占位)
-#   这是通过 BuildKit --mount=type=bind + 条件检查实现的
+# - 前端 packages/frontend/dist/ 已预构建入 git, 容器内直 COPY
+#   远程服务器不需要 Node/npm, 避免弱网下 npm install 超时
 # - Python 版本必须 ≥ 3.13 (与 packages/backend/pyproject.toml 一致)
 # - 启动顺序: alembic upgrade head → uvicorn (idempotent)
-# - /app/static 目录存放前端构建产物; 若前端未构建则放占位 index.html
+# - /app/static 目录存放前端构建产物
 #
 # 构建命令 (从项目根):
 #   docker build -f deploy/Dockerfile -t finance-exam-system:latest .
 #
-# 仅校验语法 (BuildKit check, 不实际打包):
-#   docker build --check -f deploy/Dockerfile .
+# 本地预构建前端 (提交前):
+#   cd packages/frontend && pnpm build
 
 # ===============================================
-# Stage 1: 前端构建
-# ===============================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /build
-
-# 始终先建空 dist 占位 — 保证 Stage 2 复制时不会因源缺失而失败
-RUN mkdir -p /build/dist
-
-# 使用 BuildKit bind mount 把 packages/frontend/ 挂入;
-# 即使该目录不存在, 挂载点会是空目录 (BuildKit 对 bind mount 的容错行为)
-# 这样 COPY 不会失败, 后续条件判断可优雅降级到 "前端未构建"
-#
-# Phase 5 fix (smoke test): 项目用 npm (package-lock.json 105K, 无 pnpm-lock.yaml),
-# 旧 pnpm install --frozen-lockfile 因缺 pnpm-lock.yaml 必失败.
-# 改用 npm ci (与 package-lock.json 严格匹配) + npm run build.
-RUN --mount=type=bind,source=packages/frontend,target=/mnt/frontend,ro \
-    if [ -f /mnt/frontend/package.json ]; then \
-        echo "[frontend] 检测到 package.json, 开始 npm 构建" && \
-        cp -r /mnt/frontend/. /build/ && \
-        npm ci && \
-        npm run build; \
-    else \
-        echo "[frontend] packages/frontend/package.json 不存在, 输出空 dist 占位"; \
-    fi
-
-# ===============================================
-# Stage 2: Python 后端运行时
+# Python 后端运行时
 # ===============================================
 FROM python:3.13-slim AS runtime
 
@@ -84,8 +59,8 @@ COPY packages/backend/app /app/app
 COPY packages/backend/alembic /app/alembic
 COPY packages/backend/alembic.ini /app/alembic.ini
 
-# 复制前端 dist (从 Stage 1)
-COPY --from=frontend-builder /build/dist /app/static
+# 复制前端 dist (本地预构建, 已 commit 到仓库)
+COPY packages/frontend/dist /app/static
 
 # === Build-time baked data ===
 # finance.db contains 628 questions (fin-mgmt 565 + corp-strat 63) across 2 subjects.
