@@ -22,7 +22,7 @@
    curl http://127.0.0.1:8000/health
    ```
    期望响应: `{"status":"ok","database":true,"question_count":628,"app_name":"Finance Exam System"}`
-   - `question_count:628` = fin-mgmt 565 + corp-strat 63 (build-time baked in image)
+   - `question_count:612` = fin-mgmt 565 + corp-strat 47 (build-time baked in image)
    - 若 `status:"degraded"` 或 `database:false` → 看 §4 故障排查
 6. 云反代(SLB/CLB/CF)终止 TLS → 转发 `http://<server-ip>:8000`, 透传 `X-Forwarded-For/Proto`
 7. 直跑 nginx 的看 [`deploy/nginx.example.conf`](nginx.example.conf)

@@ -1,7 +1,7 @@
 # EggEgg Exam System
 
 > 🥚 自托管的财务管理 + 公司战略和风险管理 双科目考试模拟系统。
-> 单 Docker 容器一键拉起，镜像内 build-time baked **628 题**(fin-mgmt 565 + corp-strat 63)题库。
+> 单 Docker 容器一键拉起，镜像内 build-time baked **612 题**(fin-mgmt 565 + corp-strat 47)题库。
 
 ---
 
@@ -45,7 +45,7 @@ curl http://127.0.0.1:8000/health
 ```
 
 - `status:"ok"` + `database:true` = 题库可读 + 题目数 ≥ 100 (见 `packages/backend/app/main.py` `_validate_question_db`)
-- `question_count:628` = fin-mgmt **565** + corp-strat **63**
+- `question_count:612` = fin-mgmt **565** + corp-strat **47**
 - 若返回 `status:"degraded"` 或 connection refused → 看 [OPERATIONS.md §4 故障排查](deploy/OPERATIONS.md)
 
 ### 配置信息清单(env vars 必填 + 可选)
@@ -117,7 +117,7 @@ curl http://127.0.0.1:8000/health
 
 | 组件 | 说明 | 体积 |
 |------|------|------|
-| **finance.db** (build-time baked) | 单 SQLite 库,2 科目 10+ 章节 5 题型,628 题 | 296 KB |
+| **finance.db** (build-time baked) | 单 SQLite 库,2 科目 10+ 章节 5 题型,612 题 | 296 KB |
 | **Backend** (uvicorn + FastAPI) | Python 3.13 + SQLAlchemy 2 + Pydantic 2 + JWT | ~150 MB |
 | **Frontend dist** (build-time copy) | Vue 3 SPA 静态文件(`/app/static`) | 视前端构建 |
 | **alembic** (idempotent migration) | `app.db` schema 自动演进 | < 1 MB |
@@ -171,7 +171,7 @@ OpenAPI 文档: <http://localhost:8000/docs>
 | Frontend tests | **102 / 102 ✅** |
 | `fin-mgmt` 题库 | **565 题** UNCHANGED |
 | `corp-strat` 题库 | **63 题**(5 题型全覆盖) |
-| `finance.db` size | **296 KB** / 628 题 |
+| `finance.db` size | **296 KB** / 612 题 |
 | Container | `Up + healthy + :8000 listening` ✅ |
 | docker memory peak | **86 MB / 768M 限** (充足) |
 | `/health` response | `{"status":"ok","database":true,"question_count":628,...}` |
