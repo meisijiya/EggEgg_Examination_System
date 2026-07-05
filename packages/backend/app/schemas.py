@@ -20,6 +20,19 @@ DifficultyLevel = Literal[1, 2, 3]
 UserRole = Literal["user", "admin"]
 
 
+# ---------- Subjects ----------
+
+
+class SubjectOut(BaseModel):
+    """科目列表响应 — 前端 SubjectSwitcher 下拉选项。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    question_count: int
+
+
 # ---------- Auth ----------
 
 

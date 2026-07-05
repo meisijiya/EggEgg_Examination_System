@@ -47,6 +47,7 @@ from app.api import auth as auth_api
 from app.api import dashboard as dashboard_api
 from app.api import exams as exams_api
 from app.api import explain as explain_api
+from app.api import subjects as subjects_api
 from app.config import get_settings
 from app.models.database import get_session_factory
 from app.models.question import Question
@@ -262,6 +263,7 @@ def create_app() -> FastAPI:
 
     # 路由
     app.include_router(auth_api.router)
+    app.include_router(subjects_api.router)
     app.include_router(exams_api.router)
     app.include_router(explain_api.router)
     app.include_router(dashboard_api.router)
