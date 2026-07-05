@@ -312,20 +312,29 @@ def build_db(
     difficulty_by_id: dict[str, dict[str, Any]],
     rejected: list[dict[str, Any]],
     db_path: Path,
+    subject_id: str = "fin-mgmt",
+    subject_name: str = "财务管理",
+    chapter_titles: dict[str, str] | None = None,
 ) -> dict[str, int]:
-    """构建 SQLite 数据库，返回各表行数字典。
+    """构建 SQLite 数据库,返回各表行数字典。
 
-    实现要点：
-    - subjects: 单行初始化 ('fin-mgmt', '财务管理')
-    - chapters: ch1-ch9 按 CHAPTER_TITLES 顺序写入（UNIQUE(subject_id, code) 防重）
-    - questions: 每题 + difficulty 取自 difficulty_by_id；缺 difficulty 的题计入 rejected
-    - options_json: 单/多/判断存为 JSON 数组；其他 NULL
-    - key_points_json: calc/comprehensive 存为 JSON 数组；其他 NULL
+    实现要点:
+    - subjects: 单行初始化(subject_id, subject_name,默认 'fin-mgmt'/'财务管理')
+    - chapters: chapter_titles 顺序写入(默认 CHAPTER_TITLES = ch1..ch9;UNIQUE(subject_id, code) 防重)
+    - questions: 每题 + difficulty 取自 difficulty_by_id;缺 difficulty 的题计入 rejected
+    - options_json: 单/多/判断存为 JSON 数组;其他 NULL
+    - key_points_json: calc/comprehensive 存为 JSON 数组;其他 NULL
+
+    Phase 1.2 扩展:
+    - subject_id / subject_name 参数化,支持任意科目入同一个 SQLite(分 subject_id 区分)
+    - chapter_titles 参数化,默认 = CHAPTER_TITLES(fin 兼容)
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
     # 删除旧库以保证幂等
     if db_path.exists():
         db_path.unlink()
+
+    chapter_titles = chapter_titles or CHAPTER_TITLES
 
     engine = create_engine(f"sqlite:///{db_path}")
     with engine.begin() as conn:
@@ -338,17 +347,17 @@ def build_db(
         # 1. subjects
         conn.execute(
             text("INSERT INTO subjects (id, name) VALUES (:id, :name)"),
-            {"id": "fin-mgmt", "name": "财务管理"},
+            {"id": subject_id, "name": subject_name},
         )
 
-        # 2. chapters：按 CHAPTER_TITLES 顺序（ch1..ch9）
-        for code, title in CHAPTER_TITLES.items():
+        # 2. chapters:按 chapter_titles 顺序
+        for code, title in chapter_titles.items():
             conn.execute(
                 text(
                     "INSERT INTO chapters (subject_id, code, title, weight) "
                     "VALUES (:sid, :code, :title, :weight)"
                 ),
-                {"sid": "fin-mgmt", "code": code, "title": title, "weight": 1.0},
+                {"sid": subject_id, "code": code, "title": title, "weight": 1.0},
             )
 
         # 3. questions
@@ -590,62 +599,181 @@ def write_report(
 # ---------------------------------------------------------------------------
 
 
-def main() -> int:
-    """执行 P4 全流程：修 ch9 #12 → Pydantic 校验 → 构建 SQLite → 生成报告。"""
+def _load_ai_approved_questions(
+    ai_jsonl_path: Path,
+    chapter_titles: dict[str, str],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """从 ai-generated JSONL 加载 status='approved' 的题目 → SQLite-ready dict。
+
+    Returns
+    -------
+    (questions, warnings)
+        - questions:每条 dict 含 id / chapter / stem / answer / key_points / type
+                     字段对齐 Question schema
+        - warnings:无法解析的 id 列表(章节不在 chapter_titles 或缺关键字段)
+    """
+    if not ai_jsonl_path.exists():
+        return [], [f"AI JSONL 不存在: {ai_jsonl_path}"]
+    questions: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    with open(ai_jsonl_path, encoding="utf-8") as f:
+        for ln, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as e:
+                warnings.append(f"line {ln}: JSON 解析失败 {e}")
+                continue
+            if row.get("status") != "approved":
+                continue  # 只入库 approved(其他 status 跳过)
+            chapter = row.get("chapter") or row.get("source_ref", {}).get("file", "")
+            # chapter 在 AI JSONL 中不一定明确;source_ref.file 是 "x.docx"
+            # 这里我们将 chapter 设为未知 → build_db 阶段会被 rejected(missing_chapter)
+            # 若要更智能,可根据 source_ref.file 映射 chapter
+            chapter_norm = chapter if chapter in chapter_titles else (
+                row.get("chapter") if row.get("chapter") in chapter_titles else "ch1"
+            )
+            if not row.get("stem") or not row.get("answer"):
+                warnings.append(f"line {ln}: 缺 stem 或 answer, skip")
+                continue
+            try:
+                questions.append(
+                    {
+                        "id": row["id"],
+                        "type": row.get("type", "calc"),
+                        "chapter": chapter_norm,
+                        "number": int(row.get("source_ref", {}).get("paragraph_index", 0)) + 1,
+                        "stem": row["stem"],
+                        "options": row.get("options"),
+                        "answer": row["answer"],
+                        "key_points": row.get("key_points") or [],
+                        "analysis": row.get("analysis") or "",
+                        "difficulty": row.get("difficulty", 2),
+                        "source_pdf": row.get("source_ref", {}).get("file", "ai_generated"),
+                        "page_ref": 1,
+                    }
+                )
+            except Exception as e:  # noqa: BLE001
+                warnings.append(f"line {ln}: 构造失败 {e!r}")
+    return questions, warnings
+
+
+def main(argv: list[str] | None = None) -> int:
+    """执行 P4 全流程:修 ch9 #12 → Pydantic 校验 → 构建 SQLite → 生成报告。
+
+    CLI 参数:
+      --input-jsonl        题目 JSONL(默认 = 原 finance questions.jsonl,向后兼容)
+      --output-db          输出 SQLite(默认 = 原 finance.db)
+      --subject            科目代码(默认 fin-mgmt,影响输出 DB 文件名)
+      --chapter-titles-json 章节标题 JSON 路径(可选)
+      --ai-approved-jsonl  AI 出题已 approved JSONL 路径(Phase 1.2 可选追加入库)
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="build_db",
+        description="P4 SQLite 构建(支持任意科目,默认=财务管理)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument("--input-jsonl", type=Path, default=QUESTIONS_JSONL)
+    parser.add_argument("--output-db", type=Path, default=FINAL_DB)
+    parser.add_argument("--subject", type=str, default="fin-mgmt")
+    parser.add_argument("--subject-name", type=str, default="财务管理")
+    parser.add_argument("--chapter-titles-json", type=Path, default=None)
+    parser.add_argument("--ai-approved-jsonl", type=Path, default=None)
+    args = parser.parse_args(argv)
+
+    input_jsonl: Path = args.input_jsonl
+    output_db: Path = args.output_db
+    subject_id: str = args.subject
+    subject_name: str = args.subject_name
+    ai_path: Path | None = args.ai_approved_jsonl
+    chapter_titles_path: Path | None = args.chapter_titles_json
+
+    # 加载章节标题(若指定)
+    if chapter_titles_path and chapter_titles_path.exists():
+        chapter_titles = json.loads(chapter_titles_path.read_text(encoding="utf-8"))
+    else:
+        chapter_titles = CHAPTER_TITLES
+
     print("=" * 60)
-    print("P4 阶段：ch9 #12 修正 + SQLite 构建")
+    print(f"P4 阶段:ch9 #12 修正 + SQLite 构建 (subject={subject_id})")
     print("=" * 60)
 
     # ---------- 1. 加载原始数据 ----------
     print("\n[1/6] 加载原始数据…")
-    raw_questions = read_jsonl(QUESTIONS_JSONL)
+    raw_questions = read_jsonl(input_jsonl)
     print(f"  questions.jsonl: {len(raw_questions)} 行")
+
+    # AI approved 加载(若指定路径)— Phase 1.2 扩展点
+    ai_approved: list[dict[str, Any]] = []
+    ai_warnings: list[str] = []
+    if ai_path is not None:
+        ai_approved, ai_warnings = _load_ai_approved_questions(ai_path, chapter_titles)
+        print(f"  AI approved JSONL: {len(ai_approved)} 条加载, {len(ai_warnings)} 警告")
+        for w in ai_warnings[:3]:
+            print(f"    ! {w}")
+        if ai_approved:
+            raw_questions = list(raw_questions) + ai_approved
+            print(f"  合并后总题数: {len(raw_questions)} (含 AI approved)")
 
     # 加载全部 difficulty 文件
     difficulty_rows: list[dict] = []
     difficulty_files: dict[str, int] = {}
-    for ch_path in sorted(DIFFICULTY_DIR.glob("ch*.jsonl")):
-        rows = read_jsonl(ch_path)
-        difficulty_rows.extend(rows)
-        difficulty_files[ch_path.stem] = len(rows)
-        print(f"  difficulty/{ch_path.name}: {len(rows)} 行")
+    if DIFFICULTY_DIR.exists():
+        for ch_path in sorted(DIFFICULTY_DIR.glob("ch*.jsonl")):
+            rows = read_jsonl(ch_path)
+            difficulty_rows.extend(rows)
+            difficulty_files[ch_path.stem] = len(rows)
+            print(f"  difficulty/{ch_path.name}: {len(rows)} 行")
 
     difficulty_by_id = {r["id"]: r for r in difficulty_rows}
 
-    # ---------- 2. PDF 视觉错位验证 ----------
-    print("\n[2/6] PDF 视觉错位验证…")
-    raw_opts, positions = verify_ch9_12_in_pdf()
-    print(f"  PDF 抽取的 raw options: {raw_opts}")
-    print(f"  文字坐标（用于诊断布局）: {[(round(y, 1), t) for y, t in positions[:6]]}")
-
-    # ---------- 3. 备份 + 修正 ch9 #12 ----------
-    print("\n[3/6] 备份 + 修正 ch9 #12…")
-    shutil.copy2(QUESTIONS_JSONL, QUESTIONS_BAK)
-    print(f"  备份 → {QUESTIONS_BAK.relative_to(PROJECT_ROOT)}")
-
-    updated_questions, fix_record = fix_ch9_12_options(raw_questions)
-    if fix_record is None:
-        print("  ⚠️ 未找到 ch9 #12 目标 id")
+    # ---------- 2. PDF 视觉错位验证(finance 专属,非 finance 跳过) ----------
+    if subject_id == "fin-mgmt":
+        print("\n[2/6] PDF 视觉错位验证…")
+        raw_opts, positions = verify_ch9_12_in_pdf()
+        print(f"  PDF 抽取的 raw options: {raw_opts}")
+        print(f"  文字坐标(用于诊断布局): {[(round(y, 1), t) for y, t in positions[:6]]}")
     else:
-        write_jsonl(updated_questions, QUESTIONS_JSONL)
-        print(f"  ch9 #12 修正: {fix_record['old_options']} → {fix_record['new_options']}")
-        print(f"  答案保持: {fix_record['answer_unchanged']}")
+        print("\n[2/6] PDF 视觉错位验证: 跳过(非 finance 科目)")
+
+    # ---------- 3. 备份 + 修正 ch9 #12(finance 专属)----------
+    fix_record: dict[str, Any] | None = None
+    if subject_id == "fin-mgmt":
+        print("\n[3/6] 备份 + 修正 ch9 #12…")
+        if input_jsonl.exists():
+            shutil.copy2(input_jsonl, QUESTIONS_BAK)
+            print(f"  备份 → {QUESTIONS_BAK.relative_to(PROJECT_ROOT)}")
+
+        updated_questions, fix_record = fix_ch9_12_options(raw_questions)
+        if fix_record is None:
+            print("  ⚠️ 未找到 ch9 #12 目标 id")
+        else:
+            write_jsonl(updated_questions, input_jsonl)
+            print(f"  ch9 #12 修正: {fix_record['old_options']} → {fix_record['new_options']}")
+            print(f"  答案保持: {fix_record['answer_unchanged']}")
+    else:
+        updated_questions = raw_questions
+        print("\n[3/6] ch9 #12 修正: 跳过(非 finance 科目)")
 
     # ---------- 4. Pydantic 严格校验 ----------
-    print("\n[4/6] Pydantic 严格校验（extra='forbid'）…")
+    print("\n[4/6] Pydantic 严格校验(extra='forbid')…")
     q_valid, q_errors = validate_questions(updated_questions)
-    print(f"  questions.jsonl: {len(q_valid)}/{len(updated_questions)} 通过, {len(q_errors)} 错误")
+    print(f"  questions: {len(q_valid)}/{len(updated_questions)} 通过, {len(q_errors)} 错误")
 
     d_valid, d_errors = validate_difficulty(difficulty_rows)
     print(f"  difficulty/*.jsonl: {len(d_valid)}/{len(difficulty_rows)} 通过, {len(d_errors)} 错误")
 
     if q_errors:
-        print("  ⚠️ questions.jsonl 错误样例（前 3 条）:")
+        print("  ⚠️ questions 错误样例(前 3 条):")
         for ln, msg in q_errors[:3]:
             print(f"    line {ln}: {msg[:200]}")
 
     if d_errors:
-        print("  ⚠️ difficulty 错误样例（前 3 条）:")
+        print("  ⚠️ difficulty 错误样例(前 3 条):")
         for ln, msg in d_errors[:3]:
             print(f"    line {ln}: {msg[:200]}")
 
@@ -656,9 +784,12 @@ def main() -> int:
         questions=q_valid,
         difficulty_by_id=difficulty_by_id,
         rejected=rejected,
-        db_path=FINAL_DB,
+        db_path=output_db,
+        subject_id=subject_id,
+        subject_name=subject_name,
+        chapter_titles=chapter_titles,
     )
-    print(f"  数据库: {FINAL_DB.relative_to(PROJECT_ROOT)}")
+    print(f"  数据库: {output_db.relative_to(PROJECT_ROOT) if output_db.is_absolute() else output_db}")
     print(f"  各表 COUNT(*): {counts}")
     print(f"  rejected 题数: {len(rejected)}")
 
@@ -678,7 +809,7 @@ def main() -> int:
         difficulty_files=difficulty_files,
         counts=counts,
         rejected=rejected,
-        db_path=FINAL_DB,
+        db_path=output_db,
     )
     print(f"  报告 → {IMPORT_REPORT.relative_to(PROJECT_ROOT)}")
 
@@ -686,9 +817,10 @@ def main() -> int:
     print("\n" + "=" * 60)
     print("✅ P4 完成")
     print("=" * 60)
-    print(f"ch9 #12 options: {fix_record['old_options'] if fix_record else 'N/A'}")
-    print(f"              →  {fix_record['new_options'] if fix_record else 'N/A'}")
-    print(f"finance.db: {FINAL_DB.stat().st_size:,} bytes")
+    if fix_record is not None:
+        print(f"ch9 #12 options: {fix_record['old_options']} → {fix_record['new_options']}")
+    if output_db.exists():
+        print(f"{output_db.name}: {output_db.stat().st_size:,} bytes")
     print(f"COUNT(*): subjects={counts.get('subjects')}, "
           f"chapters={counts.get('chapters')}, questions={counts.get('questions')}")
     print(f"rejected: {len(rejected)} 题")

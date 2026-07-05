@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import logging
@@ -38,6 +39,7 @@ ERRORS_LOG = PARSED_DIR / "errors.log"
 # 类型枚举（白名单）
 # ---------------------------------------------------------------------------
 
+# 财务科目章节 ch1~ch9（兼容科目扩展时，新科目可注入更长章节范围）
 CHAPTER_WHITELIST = {f"ch{i}" for i in range(1, 10)}  # ch1 ~ ch9
 TYPE_WHITELIST = {"single", "multi", "judge", "calc", "comprehensive"}
 
@@ -758,14 +760,87 @@ def write_jsonl(questions: Iterable[Question], path: Path) -> int:
 # 主入口
 # ---------------------------------------------------------------------------
 
+def _safe_rel(path: Path, base: Path) -> Path:
+    """relative_to 容错:若 path 不在 base 下,返回原 path。"""
+    try:
+        return path.relative_to(base)
+    except ValueError:
+        return path
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """构造 CLI 参数解析器。
+
+    向后兼容:不传任何参数 = 财务科目原 pipeline(PDF_DIR_DEFAULT + QUESTIONS_JSONL)。
+    """
+    parser = argparse.ArgumentParser(
+        prog="parse_questions",
+        description=(
+            "PDF → questions.jsonl 解析器 "
+            "(支持任意科目,默认=财务管理)"
+        ),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--pdf-dir",
+        type=Path,
+        default=PROJECT_ROOT / "财务管理资料",
+        help="PDF 输入目录(默认 = 项目根/财务管理资料)",
+    )
+    parser.add_argument(
+        "--subject",
+        type=str,
+        default="fin-mgmt",
+        help="科目代码,用于输出文件命名(subject=fin-mgmt 走原 questions.jsonl;否则 = <subject>_questions_pdf.jsonl)",
+    )
+    parser.add_argument(
+        "--output-jsonl",
+        type=Path,
+        default=None,
+        help="合并输出 JSONL 路径(None = 按 subject 自动决定)",
+    )
+    parser.add_argument(
+        "--by-pdf-dir",
+        type=Path,
+        default=None,
+        help="每 PDF 输出目录(None = data/parsed/by_pdf/)",
+    )
+    parser.add_argument(
+        "--chapter-titles-json",
+        type=Path,
+        default=None,
+        help="章节标题 JSON(可选;供后续科目注入)",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI 入口：解析 PDF_DIR 下所有 PDF。
 
-    使用方式：
+    使用方式:
+        # 默认(财务科目,向后兼容)
         python -m packages.preprocessor.parse_questions
+        # 公司战略科目
+        python -m packages.preprocessor.parse_questions \\
+            --pdf-dir '公司战略和风险管理' \\
+            --subject corp-strat
     """
-    argv = argv or sys.argv[1:]
-    pdf_dir = Path(argv[0]) if argv else PDF_DIR_DEFAULT
+    parser = _build_arg_parser()
+    args = parser.parse_args(argv)
+
+    pdf_dir: Path = args.pdf_dir
+    subject: str = args.subject
+
+    # 输出路径解析 —— subject=fin-mgmt 时维持原 questions.jsonl 输出路径(向后兼容)
+    if args.output_jsonl is not None:
+        merged_path: Path = args.output_jsonl
+    elif subject == "fin-mgmt":
+        merged_path = PARSED_DIR / "questions.jsonl"
+    else:
+        merged_path = PARSED_DIR / f"{subject}_questions_pdf.jsonl"
+
+    by_pdf_dir: Path = args.by_pdf_dir or BY_PDF_DIR
+    chapter_titles_path: Path | None = args.chapter_titles_json
 
     if not pdf_dir.exists():
         logger.error(f"PDF 目录不存在: {pdf_dir}")
@@ -780,10 +855,22 @@ def main(argv: list[str] | None = None) -> int:
     if ERRORS_LOG.exists():
         ERRORS_LOG.unlink()
 
-    # 清空旧输出
-    if BY_PDF_DIR.exists():
-        for old in BY_PDF_DIR.glob("*.jsonl"):
+    # 清空旧输出 —— 只清空 by_pdf_dir 不清 merged_path(避免破坏 finance pipeline 现有产物)
+    if by_pdf_dir.exists():
+        for old in by_pdf_dir.glob("*.jsonl"):
             old.unlink()
+
+    merged_path.parent.mkdir(parents=True, exist_ok=True)
+    by_pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(
+        "parse_questions: subject=%s pdf_dir=%s → %s",
+        subject,
+        _safe_rel(pdf_dir, PROJECT_ROOT),
+        _safe_rel(merged_path, PROJECT_ROOT),
+    )
+    if chapter_titles_path is not None:
+        logger.info("使用章节标题 JSON: %s", _safe_rel(chapter_titles_path, PROJECT_ROOT))
 
     all_questions: list[Question] = []
     failed_pdfs: list[tuple[str, str]] = []
@@ -803,16 +890,30 @@ def main(argv: list[str] | None = None) -> int:
             logger.warning(f"{pdf_path.name} 未提取到题目")
             continue
 
-        out_path = BY_PDF_DIR / f"{pdf_path.stem}.jsonl"
+        out_path = by_pdf_dir / f"{pdf_path.stem}.jsonl"
         n = write_jsonl(qs, out_path)
-        logger.info(f"{pdf_path.name}: {n} 题 → {out_path.relative_to(PROJECT_ROOT)}")
+        try:
+            out_path_rel = out_path.relative_to(PROJECT_ROOT)
+        except ValueError:
+            out_path_rel = out_path
+        logger.info(f"{pdf_path.name}: {n} 题 → {out_path_rel}")
         all_questions.extend(qs)
 
     # 合并输出
     if all_questions:
-        merged_path = PARSED_DIR / "questions.jsonl"
         n = write_jsonl(all_questions, merged_path)
-        logger.info(f"合并输出: {n} 题 → {merged_path.relative_to(PROJECT_ROOT)}")
+        try:
+            merged_rel = merged_path.relative_to(PROJECT_ROOT)
+        except ValueError:
+            merged_rel = merged_path
+        logger.info(f"合并输出: {n} 题 → {merged_rel}")
+    else:
+        logger.warning(
+            "未提取到任何题目(%d 个 PDF 输入),仍写空 JSONL 以记录 pipeline 状态",
+            len(pdf_paths),
+        )
+        # 即使 0 题也写空 JSONL,便于下游 build_db.py 检测"已跑过 pipeline"
+        merged_path.write_text("", encoding="utf-8")
 
     # 统计
     by_chapter: dict[str, int] = {}
