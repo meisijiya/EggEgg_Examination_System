@@ -62,6 +62,17 @@ const difficultyLabel = computed(() => {
 /** 选项字母 A/B/C/D/...。 */
 const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
+/**
+ * 剥除选项文本开头的字母前缀（如 "A、xxx" / "A. xxx" → "xxx"）。
+ *
+ * 后端 options_json 中选项文本已带 A/B/C/D 前缀（预处理未剥离），
+ * 前端模板又通过 optionLetters 生成一层标签，导致双重显示 "A. A、xxx"。
+ * 此处用渲染时 strip 消掉第二层，不改 DB 不改链路，ponytail lite。
+ */
+function stripOptionPrefix(opt: string): string {
+  return opt.replace(/^[A-H][.、]\s*/, '');
+}
+
 /** 学员答案（按题型归一为集合）。 */
 const userSet = computed(() => {
   return new Set((props.userAnswer || '').toUpperCase().split('').filter(Boolean));
@@ -259,7 +270,7 @@ const isCorrect = computed(() => {
         :class="{ selected: userSet.has(optionLetters[idx]), readonly }"
         @click="toggleOption(optionLetters[idx])"
       >
-        <strong>{{ optionLetters[idx] }}.</strong> {{ opt }}
+        <strong>{{ optionLetters[idx] }}.</strong> {{ stripOptionPrefix(opt) }}
       </div>
     </div>
 
