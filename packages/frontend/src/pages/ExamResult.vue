@@ -419,7 +419,15 @@ function restartExam(): void {
 .charts-row { margin-bottom: 0; }
 .chart-box {
   width: 100%;
+  min-height: 280px;
   height: 300px;
+}
+/* 移动端图表限高 */
+@media (max-width: 480px) {
+  .chart-box {
+    max-height: 240px;
+    height: auto;
+  }
 }
 
 .sub-tip {

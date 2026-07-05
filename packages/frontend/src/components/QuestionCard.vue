@@ -423,6 +423,8 @@ const isCorrect = computed(() => {
   margin: var(--s-3) 0;
   font-size: 18px;
   font-weight: 400;
+  overflow-x: auto;
+  display: block;
 }
 .question-stem :deep(th),
 .question-stem :deep(td) {

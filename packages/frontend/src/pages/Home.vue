@@ -179,7 +179,8 @@ defineExpose({
 
     <div v-if="dashboard.data && dashboard.data.history.length > 0" class="section-card">
       <h2>最近 5 次成绩</h2>
-      <el-table :data="dashboard.data.history.slice(-5).reverse()" stripe>
+      <div class="table-responsive">
+        <el-table :data="dashboard.data.history.slice(-5).reverse()" stripe>
         <el-table-column label="时间" width="220">
           <template #default="{ row }">
             {{ formatDateTime(row.started_at) }}
@@ -197,7 +198,8 @@ defineExpose({
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
     </div>
 
     <!-- 模式选择 modal（fix-22） -->

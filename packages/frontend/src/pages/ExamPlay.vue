@@ -444,7 +444,7 @@ watch(currentChapter, (cur) => {
 }
 .aside-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
   gap: 6px;
 }
 .aside-btn {
@@ -496,6 +496,8 @@ watch(currentChapter, (cur) => {
   font-size: var(--fs-body-lg);
 }
 
+/* --- 移动端断点 --- */
+
 @media (max-width: 900px) {
   .play-body {
     flex-direction: column;
@@ -506,5 +508,39 @@ watch(currentChapter, (cur) => {
     position: static;
   }
   .play-progress { width: 100%; }
+}
+
+@media (max-width: 640px) {
+  .play-header {
+    padding: var(--s-2) var(--s-3);
+    gap: var(--s-2);
+  }
+  .header-left {
+    font-size: var(--fs-body);
+    gap: var(--s-2);
+  }
+  .timer-display {
+    font-size: var(--fs-h3);
+    padding: 4px var(--s-2);
+  }
+  .play-body {
+    padding: var(--s-2);
+  }
+  .play-aside {
+    padding: var(--s-3);
+  }
+  .aside-grid {
+    gap: 4px;
+  }
+  .aside-btn {
+    font-size: var(--fs-caption);
+  }
+  .nav-buttons {
+    flex-direction: column;
+    gap: var(--s-2);
+  }
+  .nav-buttons .el-button {
+    width: 100%;
+  }
 }
 </style>

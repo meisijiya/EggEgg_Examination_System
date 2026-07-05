@@ -237,7 +237,8 @@ defineExpose({
 
     <div v-if="dashboard.data && dashboard.data.history.length > 0" class="section-card">
       <h2>📜 历次成绩明细</h2>
-      <el-table :data="dashboard.data.history.slice().reverse()" stripe>
+      <div class="table-responsive">
+        <el-table :data="dashboard.data.history.slice().reverse()" stripe>
         <el-table-column label="时间" width="180">
           <template #default="{ row }">
             {{ formatDateTime(row.started_at) }}
@@ -278,7 +279,8 @@ defineExpose({
             </el-popconfirm>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
     </div>
   </div>
 </template>
@@ -311,10 +313,20 @@ h1 {
 
 .chart-box {
   width: 100%;
+  min-height: 280px;
   height: 320px;
 }
 .chart-box-tall {
+  min-height: 280px;
   height: 360px;
+}
+/* 移动端图表限高 — 避免小屏占满一屏 */
+@media (max-width: 480px) {
+  .chart-box,
+  .chart-box-tall {
+    max-height: 240px;
+    height: auto;
+  }
 }
 
 /* 趋势对比卡 — 柔色背景 + 大字 */

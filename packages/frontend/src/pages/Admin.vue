@@ -278,7 +278,8 @@ defineExpose({
             🎉 题目库无风险项，无需 review
           </div>
 
-          <el-table v-else :data="queue" stripe>
+          <div v-else class="table-responsive">
+            <el-table :data="queue" stripe>
             <el-table-column prop="id" label="ID" width="80" />
             <el-table-column prop="type" label="题型" width="100" />
             <el-table-column prop="chapter_code" label="章节" width="100" />
@@ -310,6 +311,7 @@ defineExpose({
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </el-tab-pane>
 
         <!-- Tab 2：AI 生成题审核（fix-30a） -->
@@ -325,14 +327,14 @@ defineExpose({
             🎉 暂无 AI 待审核题目
           </div>
 
-          <el-table
-            v-else
-            :data="aiQuestions"
-            stripe
-            :expand-row-keys="expandedAiRows"
-            row-key="id"
-            @expand-change="(rows: AiGeneratedQuestion[]) => (expandedAiRows = rows.map((r) => r.id))"
-          >
+          <div v-else class="table-responsive">
+            <el-table
+              :data="aiQuestions"
+              stripe
+              :expand-row-keys="expandedAiRows"
+              row-key="id"
+              @expand-change="(rows: AiGeneratedQuestion[]) => (expandedAiRows = rows.map((r) => r.id))"
+            >
             <el-table-column type="expand">
               <template #default="{ row }">
                 <div class="ai-expand">
@@ -401,6 +403,7 @@ defineExpose({
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -409,7 +412,7 @@ defineExpose({
     <el-dialog
       v-model="editDialogVisible"
       :title="`修正题目 #${editing?.id}`"
-      width="600px"
+      width="min(600px, 95vw)"
       :close-on-click-modal="false"
       @close="closeEdit"
     >
