@@ -78,4 +78,78 @@ cp .env.example .env && python -c "import secrets; print(secrets.token_urlsafe(3
 | 题库 metadata(题目+答案) | ✅ 入 git(`data/parsed/`) |
 | 用户考试记录(app.db) | ❌ 不入 git, runtime 备份到 OSS |
 
+---
+
+## 7. 🔄 预处理数据管线（Data Pipeline Contract）
+
+> **核心原则**：所有科目共享同一个 `data/final/finance.db` SQLite schema。后端 API（`/subjects`、`/exams/start`、`/exams/{id}/submit` 等）**只读不写**此库，新增科目只需 INSERT 行，**永远不需要改后端代码**。
+
+### 7.1 管线架构（3 阶段）
+
+```
+原始资料（PDF / DOCX）
+  │
+  ├── ① 有答案 PDF  → parse_questions.py → questions.jsonl（Pydantic 校验）
+  │   └── difficulty 标注 → difficulty/ch{1..N}.jsonl
+  │
+  ├── ② 无答案 DOCX → parse_docx.py → segments JSONL
+  │   └── multi-agent AI 出题 → ai_generated.jsonl
+  │       └── admin review gate → status='approved'
+  │
+  └── ③ build_db.py --subject <id> [--ai-approved-jsonl <path>]
+        │
+        └── data/final/finance.db  ← 后端 API 只读消费
+```
+
+### 7.2 单库契约（Single-DB Contract）
+
+| 规则 | 说明 |
+|---|---|
+| **一库多科** | 所有科目入同一个 `data/final/finance.db`，按 `subject_id` 区分 |
+| **INSERT 不 ALTER** | 新科目 = `INSERT subjects` + `INSERT chapters`，**不**加列 / 不改 schema / 不跑 Alembic |
+| **后端零修改** | 只要 `subjects` / `chapters` / `questions` 三表数据对，现有 API 全部直接可用 |
+| **`question_count` 自动** | `/subjects` 端点用 `SELECT COUNT(*) ... GROUP BY subject_id`，不用手动维护计数 |
+
+### 7.3 Schema 契约（后端读哪些列）
+
+新增科目预处理产出**必须**对齐以下字段，否则后端 API 运行时报错：
+
+| 表 | 关键列 | 约束 | 后端 API 使用方 |
+|---|---|---|---|
+| `subjects` | `id` TEXT PK, `name` TEXT | `id` 用 kebab-case（如 `fin-mgmt`） | `/subjects`、`StartExamRequest` 校验 |
+| `chapters` | `subject_id`, `code` TEXT（如 `ch1`）, `title`, `weight` REAL | `UNIQUE(subject_id, code)` | `paper_assembler` 章节加权抽样 |
+| `questions` | `type` TEXT, `difficulty` **INTEGER 1/2/3**, `stem`, `answer`, `options_json`, `key_points_json` | `CHECK(difficulty IN (1,2,3))` | `/exams/start` 出题、`grader` 判分 |
+
+### 7.4 Pydantic 规范（权威 schema）
+
+- **规范源**：`packages/preprocessor/parse_questions.py` 中的 `Question(BaseModel)` 类 — `extra='forbid'`
+- 所有解析脚本**必须**产出符合此模型的记录，`build_db.py` 会做全量 `ValidationError` 校验
+- 新题型 → 先在 `packages/backend/app/schemas.py` 的 `QuestionType` Literal 中加字面量，再扩展解析器
+- `options_json` / `key_points_json`：只对特定题型序列化 JSON 数组（`single/multi/judge` → options；`calc/comprehensive/short_answer/case_analysis` → key_points）
+
+### 7.5 AI 出题 gate（仅 DOCX 路径）
+
+```
+ai_generated.jsonl (status='pending')
+  → admin review (GET /admin/ai-generated-questions, POST approve/reject)
+  → status='approved' 的行
+  → build_db.py --ai-approved-jsonl <path> 合并入库
+```
+
+- `build_db.py` **只加载 `status='approved'` 的行**，其他 status 静默跳过
+- 用户不在 admin 页面时可用 `auto_approve_ai.py` 按 `confidence ≥ 0.6 + peer_review agree` 自动 approve
+
+### 7.6 新增科目 checklist（操作顺序）
+
+1. **[ ] 资料放置**：原始 PDF/DOCX 放到项目根目录下独立文件夹（如 `公司战略和风险管理/`）
+2. **[ ] 解析适配**：`parse_questions.py --pdf-dir` 或 `parse_docx.py --docx-dir` （调整 chapter 白名单）
+3. **[ ] chapter 映射**：在 `build_db.py` 调用时传 `--chapter-titles-json` 或硬编码 `CHAPTER_TITLES` 字典
+4. **[ ] difficulty 标注**：确保每个 `questions.jsonl` 行有对应的 `difficulty/chN.jsonl` 记录
+5. **[ ] 入库**：`python build_db.py --subject <id> --subject-name <名称> --output-db data/final/finance.db`
+6. **[ ] 验证**：`sqlite3 data/final/finance.db "SELECT COUNT(*) FROM questions WHERE subject_id='<id>'"` ≥ 预期题数
+7. **[ ] 前端**：无需改动 — `/subjects` 端点自动发现新科目，`SubjectSwitcher` 自动渲染 dropdown
+8. **[ ] `.gitignore`**：原始资料文件夹（PDF/DOCX）不入 git；`data/parsed/*.jsonl` 入 git
+
+> 📚 详细见 [`docs/SUBJECT_ONBOARDING.md`](docs/SUBJECT_ONBOARDING.md) / [`spec §5`](docs/superpowers/specs/2026-07-04-finance-exam-system-design.md) / [`README.md`](README.md)
+
 > 📚 全局 [`AGENTS.md`](file:///home/ljh2923/.config/opencode/AGENTS.md) / [`spec`](docs/superpowers/specs/2026-07-04-finance-exam-system-design.md) / [`README.md`](README.md)
