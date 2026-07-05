@@ -2,7 +2,7 @@
 # ===============================================
 # Finance Exam System — 多阶段 Dockerfile
 # ===============================================
-# Stage 1: 前端构建  (node:20-alpine + pnpm)
+# Stage 1: 前端构建  (node:20-alpine + npm, 与项目 package-lock.json 匹配)
 # Stage 2: Python 后端运行时 (python:3.13-slim + uv)
 #
 # 设计要点:
@@ -31,13 +31,16 @@ RUN mkdir -p /build/dist
 # 使用 BuildKit bind mount 把 packages/frontend/ 挂入;
 # 即使该目录不存在, 挂载点会是空目录 (BuildKit 对 bind mount 的容错行为)
 # 这样 COPY 不会失败, 后续条件判断可优雅降级到 "前端未构建"
+#
+# Phase 5 fix (smoke test): 项目用 npm (package-lock.json 105K, 无 pnpm-lock.yaml),
+# 旧 pnpm install --frozen-lockfile 因缺 pnpm-lock.yaml 必失败.
+# 改用 npm ci (与 package-lock.json 严格匹配) + npm run build.
 RUN --mount=type=bind,source=packages/frontend,target=/mnt/frontend,ro \
     if [ -f /mnt/frontend/package.json ]; then \
-        echo "[frontend] 检测到 package.json, 开始 pnpm 构建" && \
-        corepack enable && \
+        echo "[frontend] 检测到 package.json, 开始 npm 构建" && \
         cp -r /mnt/frontend/. /build/ && \
-        pnpm install --frozen-lockfile && \
-        pnpm build; \
+        npm ci && \
+        npm run build; \
     else \
         echo "[frontend] packages/frontend/package.json 不存在, 输出空 dist 占位"; \
     fi
@@ -114,4 +117,5 @@ EXPOSE 8000
 
 # 启动命令: 先 alembic 迁移 (idempotent, 已迁移则 no-op), 再 uvicorn
 # alembic.ini 路径已 COPY 到 /app/alembic.ini, 工作目录是 /app
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Phase 5 fix: uv sync 把 alembic/uvicorn 装到 .venv/bin/, 不在 PATH — 必须用绝对路径
+CMD ["sh", "-c", "/app/.venv/bin/alembic upgrade head && exec /app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000"]

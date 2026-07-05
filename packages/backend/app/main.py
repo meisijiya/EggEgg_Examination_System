@@ -60,20 +60,28 @@ logging.basicConfig(
 
 
 def _resolve_static_dir() -> Path | None:
-    """解析前端 dist 路径（开发期 vs 容器期不同位置）。
+    """解析前端 dist 路径（容器期优先, 开发期 fallback）。
 
+    - 容器期：dist 由多阶段构建 COPY 到 /app/static（固定路径）
     - 开发期：CWD 跑 uvicorn 时，按 `__file__` 反推 repo 根 + packages/frontend/dist
-    - 容器期：dist 由多阶段构建 COPY 到 /app/static
     - 都不存在 → 返回 None（caller 完全跳过静态服务）
+
+    Phase 5 fix: 原 eager-evaluated candidates list 在容器内 parents[3] 不存在,
+    Python 构造 list 时直接抛 IndexError, fallback /app/static 永远轮不到.
+    改为容器期优先 + 显式 exists() check, 开发期 fallback 用 try/except.
     """
+    # 容器期：/app/static 是多阶段构建 COPY 的固定路径, 优先检查避免触发 IndexError
+    container_dist = Path("/app/static")
+    if (container_dist / "index.html").exists():
+        return container_dist
     # 开发期：{repo}/packages/frontend/dist（main.py 在 packages/backend/app/main.py）
-    candidates = [
-        Path(__file__).resolve().parents[3] / "packages" / "frontend" / "dist",
-        Path("/app/static"),
-    ]
-    for p in candidates:
-        if (p / "index.html").exists():
-            return p
+    # 容器内 parents 只有 3 级 (/app/app → /app → /), parents[3] 抛 IndexError → 用 try/except 兜底
+    try:
+        dev_dist = Path(__file__).resolve().parents[3] / "packages" / "frontend" / "dist"
+        if (dev_dist / "index.html").exists():
+            return dev_dist
+    except IndexError:
+        pass
     return None
 
 

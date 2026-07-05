@@ -43,6 +43,7 @@ logs/
 # 资料目录 —— 不入 git
 资料/
 公司战略和风险管理/
+财务管理资料/
 
 # 原始 PDF / DOCX 资料 —— 体积大且含未授权内容,不入 git(Phase 4 lock-down)
 *.pdf
