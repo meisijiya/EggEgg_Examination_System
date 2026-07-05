@@ -29,6 +29,7 @@ import ExplainPanel from '@/components/ExplainPanel.vue';
 import { useExamStore } from '@/stores/exam';
 import { formatDateTime } from '@/utils/format';
 import { formatChapterCode } from '@/utils/formatChapterCode';
+import { renderMarkdown } from '@/composables/useMarkdown';
 
 echarts.use([
   RadarChart,
@@ -295,7 +296,7 @@ function restartExam(): void {
                   {{ formatChapterCode(a.chapter_code) }}
                 </el-tag>
                 <span class="qa-seq">第 {{ a.sequence }} 题</span>
-                <span class="qa-stem-text">{{ a.stem.slice(0, 40) }}{{ a.stem.length > 40 ? '...' : '' }}</span>
+                <span class="qa-stem-text">{{ a.stem.replace(/[#*_`>|\-]/g, '').replace(/\s+/g, ' ').slice(0, 40) }}{{ a.stem.length > 40 ? '...' : '' }}</span>
                 <span class="qa-score">{{ a.awarded_score }} / {{ a.full_score }} 分</span>
                 <span v-if="a.sub_answer_count && a.sub_answer_count >= 2" class="qa-meta">
                   识别到 {{ a.sub_answer_count }} 个分小问作答

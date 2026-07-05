@@ -16,6 +16,7 @@
 import { computed } from 'vue';
 import type { QuestionPublic, QuestionType } from '@/types/api';
 import { formatChapterCode } from '@/utils/formatChapterCode';
+import { renderMarkdown } from '@/composables/useMarkdown';
 
 interface Props {
   question: QuestionPublic;
@@ -247,7 +248,7 @@ const isCorrect = computed(() => {
       <span v-else-if="showCorrect && isCorrect === false" class="answer-wrong">✗ 错误</span>
     </div>
 
-    <div class="question-stem">{{ question.stem }}</div>
+    <div class="question-stem" v-html="renderMarkdown(question.stem)" />
 
     <!-- 客观题：单选 / 多选 -->
     <div v-if="question.type === 'single' || question.type === 'multi'" class="options-list">
@@ -412,6 +413,57 @@ const isCorrect = computed(() => {
   margin-bottom: var(--s-6);
   letter-spacing: -0.005em;
   white-space: pre-wrap;
+  /* fix-30: GFM 表格/代码块需自动换行,不强制保留 markdown 原文 \n */
+}
+
+/* fix-30: question-stem 内的 GFM markdown 表格/列表/粗体样式 — 走 v-html 后无内置样式 */
+.question-stem :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: var(--s-3) 0;
+  font-size: 18px;
+  font-weight: 400;
+}
+.question-stem :deep(th),
+.question-stem :deep(td) {
+  border: 1px solid var(--border);
+  padding: var(--s-2) var(--s-4);
+  text-align: left;
+  vertical-align: top;
+}
+.question-stem :deep(th) {
+  background: var(--surface-2);
+  font-weight: var(--fw-semibold);
+  color: var(--fg);
+}
+.question-stem :deep(tr:nth-child(even) td) {
+  background: var(--surface-soft, var(--surface-2));
+}
+.question-stem :deep(ul),
+.question-stem :deep(ol) {
+  margin: var(--s-3) 0;
+  padding-left: var(--s-6);
+}
+.question-stem :deep(li) {
+  margin-bottom: var(--s-2);
+}
+.question-stem :deep(strong) {
+  font-weight: var(--fw-semibold);
+  color: var(--fg);
+}
+.question-stem :deep(code) {
+  font-family: var(--font-mono);
+  background: var(--surface-2);
+  padding: 1px var(--s-2);
+  border-radius: var(--r-sm);
+  font-size: 18px;
+}
+.question-stem :deep(pre) {
+  background: var(--surface-2);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  overflow-x: auto;
+  font-family: var(--font-mono);
 }
 
 /* 选项：4/5 个选项 + selected/correct/wrong 态（与 global .option 对齐） */

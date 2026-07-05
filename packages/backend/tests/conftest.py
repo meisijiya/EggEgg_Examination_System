@@ -33,6 +33,12 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+# phase-5 fix-6: 让 tests 能 import packages.preprocessor.parse_docx
+#   路径向上 4 级: tests/ → backend/ → packages/ → 项目根(/home/.../EggEgg_Examination_System/)
+#   把项目根加入 sys.path,这样 'packages.preprocessor.parse_docx' 能 resolve
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 
 @pytest.fixture(scope="session")
 def project_root() -> Path:

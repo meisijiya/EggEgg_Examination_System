@@ -113,6 +113,8 @@ def _iter_table_texts(docx_path: Path) -> list[tuple[int, str]]:
     """提取 DOCX 中的表格内容,作为段落补充。返回 [(paragraph_index, text), ...]。
 
     索引从 100_000 起,避免与正段落冲突(同一 DOCX 段落数远小于 100k)。
+    fix-30: emit GFM markdown table (header + |---| separator + body rows),
+    让前端 markdown-it 解析为 <table>；旧版 ' | '.join 拍平到单字符串会丢失列结构。
     """
     from docx import Document
 
@@ -120,13 +122,40 @@ def _iter_table_texts(docx_path: Path) -> list[tuple[int, str]]:
     doc = Document(str(docx_path))
     base_idx = 100_000
     for t_idx, table in enumerate(doc.tables):
-        rows_text: list[str] = []
+        rows: list[list[str]] = []
         for row in table.rows:
-            cells = [(c.text or "").strip() for c in row.cells]
-            rows_text.append(" | ".join(cells))
-        if rows_text:
-            results.append((base_idx + t_idx, "\n".join(rows_text)))
+            # python-docx: cell.paragraphs[*].text 是 cell 全文本(合并多段)
+            cells = [
+                "".join(p.text for p in c.paragraphs).strip()
+                for c in row.cells
+            ]
+            rows.append(cells)
+        if rows:
+            md_text = _format_markdown_table(rows)
+            results.append((base_idx + t_idx, md_text))
     return results
+
+
+def _format_markdown_table(rows: list[list[str]]) -> str:
+    """2D cells → GFM markdown table。
+
+    仅当至少有 1 行时生成 (header 必在,sep 自动补全,body rows 可为空)。
+    列数取 header 长度,body rows 自动截断/补空以保持列对齐。
+    """
+    if not rows:
+        return ""
+    header = rows[0]
+    col_count = max(1, len(header))
+    # 规范化:每行截断/补空到 col_count
+    norm = [((r + [""] * col_count)[:col_count]) for r in rows]
+    sep = ["---"] * col_count
+    lines = [
+        "| " + " | ".join(norm[0]) + " |",
+        "| " + " | ".join(sep) + " |",
+    ]
+    for r in norm[1:]:
+        lines.append("| " + " | ".join(r) + " |")
+    return "\n".join(lines)
 
 
 def _build_section_paths(

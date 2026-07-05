@@ -17,6 +17,7 @@ import {
   rejectQuestion,
 } from '@/api/subjects';
 import { useAuthStore } from '@/stores/auth';
+import { renderMarkdown } from '@/composables/useMarkdown';
 import type {
   ReviewQueueItem,
   ReviewUpdateRequest,
@@ -297,7 +298,7 @@ defineExpose({
             </el-table-column>
             <el-table-column label="题干">
               <template #default="{ row }">
-                <div class="stem-cell">{{ row.stem }}</div>
+                <div class="stem-cell" v-html="renderMarkdown(row.stem)" />
               </template>
             </el-table-column>
             <el-table-column prop="answer" label="答案" width="80" />
@@ -370,7 +371,7 @@ defineExpose({
             </el-table-column>
             <el-table-column label="题干">
               <template #default="{ row }">
-                <div class="stem-cell">{{ row.stem }}</div>
+                <div class="stem-cell" v-html="renderMarkdown(row.stem)" />
               </template>
             </el-table-column>
             <el-table-column label="AI 答案" width="120">
@@ -414,7 +415,7 @@ defineExpose({
     >
       <el-form v-if="editing" label-position="top">
         <el-form-item label="题干（只读）">
-          <div class="readonly-stem">{{ editing.stem }}</div>
+          <div class="readonly-stem" v-html="renderMarkdown(editing.stem)" />
         </el-form-item>
         <el-form-item label="答案">
           <el-input v-model="editForm.answer" placeholder="如：A / ABD / 对" />
@@ -509,6 +510,24 @@ defineExpose({
   color: var(--fg);
 }
 
+/* fix-30: admin stem-cell 内 GFM 表格最小样式 (与 QuestionCard 对齐) */
+.stem-cell :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--fs-body);
+  font-weight: 400;
+  margin: var(--s-1) 0;
+}
+.stem-cell :deep(th),
+.stem-cell :deep(td) {
+  border: 1px solid var(--border);
+  padding: var(--s-1) var(--s-2);
+  text-align: left;
+}
+.stem-cell :deep(th) {
+  background: var(--surface-2);
+}
+
 .readonly-stem {
   background: var(--surface-2);
   padding: var(--s-3) var(--s-4);
@@ -516,10 +535,28 @@ defineExpose({
   font-size: var(--fs-body);
   line-height: var(--lh-snug);
   white-space: pre-wrap;
-  max-height: 120px;
+  max-height: 240px;
   overflow-y: auto;
   color: var(--fg);
   border-left: 3px solid var(--border-strong);
+}
+
+/* fix-30: readonly-stem 内 GFM 表格 (admin edit dialog) */
+.readonly-stem :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--fs-body);
+  font-weight: 400;
+  margin: var(--s-2) 0;
+}
+.readonly-stem :deep(th),
+.readonly-stem :deep(td) {
+  border: 1px solid var(--border);
+  padding: var(--s-1) var(--s-3);
+  text-align: left;
+}
+.readonly-stem :deep(th) {
+  background: var(--surface);
 }
 
 /* table 卡片化 */
