@@ -13,9 +13,19 @@
    ```bash
    docker compose -f deploy/docker-compose.yml --env-file .env up -d --build
    ```
-4. 验活: `curl -fsS http://127.0.0.1:8000/health` → 期望 `{status:"ok", database:true, question_count:N}`
-5. 云反代(SLB/CLB/CF)终止 TLS → 转发 `http://<server-ip>:8000`, 透传 `X-Forwarded-For/Proto`
-6. 直跑 nginx 的看 [`deploy/nginx.example.conf`](nginx.example.conf)
+4. **等 30s** 让 uvicorn boot (启动顺序: `alembic upgrade head` → `uvicorn app.main:app`):
+   ```bash
+   sleep 30
+   ```
+5. 健康检查:
+   ```bash
+   curl http://127.0.0.1:8000/health
+   ```
+   期望响应: `{"status":"ok","database":true,"question_count":628,"app_name":"Finance Exam System"}`
+   - `question_count:628` = fin-mgmt 565 + corp-strat 63 (build-time baked in image)
+   - 若 `status:"degraded"` 或 `database:false` → 看 §4 故障排查
+6. 云反代(SLB/CLB/CF)终止 TLS → 转发 `http://<server-ip>:8000`, 透传 `X-Forwarded-For/Proto`
+7. 直跑 nginx 的看 [`deploy/nginx.example.conf`](nginx.example.conf)
 
 > 反代模型图见 `README.md` §部署架构图; 不在云反代前置时务必限制 `127.0.0.1:8000` 端口源 IP。
 
@@ -46,23 +56,58 @@
 | 查看日志 | `docker compose -f deploy/docker-compose.yml logs -f --tail=100` |
 | 健康检查 | `curl -fsS http://127.0.0.1:8000/health` |
 | 备份 app.db | `docker compose exec -T finance-exam sqlite3 /app/data/app.db ".backup '/app/data/app.db.$(date +%Y%m%d)'"` |
-| 升级 | `git pull && docker compose -f deploy/docker-compose.yml build && docker compose -f deploy/docker-compose.yml up -d` |
-| 回滚 | `git checkout <last-good-sha> && docker compose -f deploy/docker-compose.yml build --no-cache && docker compose -f deploy/docker-compose.yml up -d` |
 
-- 资源限制(`docker-compose.yml` `deploy.resources`): CPU `0.8/0.2` / MEM `768M/256M` — 1 vCPU / 1GB 节点调优, 不要放大除非加机器
+### 升级到最新版(完整流程)
+
+```bash
+# 1. 拉取最新 main 分支代码
+git pull origin main
+
+# 2. 停旧 container (让 volume 释放 + 数据落盘)
+cd deploy && docker compose down
+
+# 3. 重新 build 镜像 + 后台启动
+docker compose up -d --build
+
+# 4. 等 30s + 健康检查
+sleep 30 && curl http://127.0.0.1:8000/health
+# 期望: {"status":"ok","database":true,"question_count":628,...}
+```
+
+> ⚠️ `docker compose down` **不会删 volume**(`../data:/app/data:rw`), `app.db` + 自定义 `finance.db` 持久化保留。
+
+### 回滚
+
+```bash
+git checkout <last-good-sha> && \
+  cd deploy && docker compose build --no-cache && docker compose up -d
+```
+
+- 资源限制(`docker-compose.yml` `deploy.resources`): CPU `0.8/0.2` / MEM `768M/256M` — 1 vCPU / 1GB 节点调优, 实测 peak 86M, **充足**
 - 健康检查失败 3 次 → `restart: unless-stopped` 自动重启
 - 日志 `json-file` max-size 10M × 3 file — 防磁盘被填满
+- 单 container 名: `egg-egg-exam-system`(compose v2 顶层 `name:`,见 `deploy/docker-compose.yml` L23)
 
 ---
 
 ## 4. 🔍 故障排查
+
+### Phase 5 实际遇到 + 修过的 3 个 bug(fix-26)
+
+| 症状 | 根因 | 修复 |
+|------|------|------|
+| `docker build` 失败 `ERR_UNKNOWN_BUILTIN_MODULE` / npm error ENOENT | `Dockerfile` Stage 1 误用 `pnpm install`,但项目是 npm 生态(只有 `package-lock.json`,无 `pnpm-lock.yaml`) | `Dockerfile` L34-43 改 `corepack enable` 前直接用 `npm ci + npm run build`(不动 `package.json`) |
+| Container `Restarting (1) Less than a second ago` 日志 `alembic: not found` | `CMD ["sh", "-c", "alembic upgrade head && exec uvicorn ..."]` 跑时 `alembic` / `uvicorn` 不在 PATH(uv sync 装到 `.venv/bin/`) | `Dockerfile` L114 改 `/app/.venv/bin/alembic` + `/app/.venv/bin/uvicorn --app-dir /app`(绝对路径) |
+| Container 启动后 `/health` 5xx,日志 `IndexError: list index out of range` in `_resolve_static_dir` | 容器内 `main.py` 用 `parents[3]` 反推 4 级路径到 repo root,但 runtime 文件位置只允许 3 级 parents | `main.py` `_resolve_static_dir` 改容器期优先直接使用 `/app/static`,开发期 fallback `parents[3]`,外层 try/except 兜底 |
+
+### 常规排查
 
 | 症状 | 排查点 |
 |---|---|
 | 端口冲突 | `ss -tlnp | grep 8000`, 改 `docker-compose.yml ports` 或停占用的 service |
 | `/health` 返回 `database:false` | 容器内 `ls -la /app/data/final/`, 检查 finance.db 是否被 volume 覆盖 / 损坏 |
 | 502 Bad Gateway | 反代后端 upstream 是否配 `http://<server-ip>:8000`; 容器是否 `unhealthy`(`docker ps`) |
-| OOM Killed | `docker stats` 看 mem; 单 SQLite 库 + uvicorn 一般 < 200M, 768M 限制下足够 |
+| OOM Killed | `docker stats` 看 mem; 单 SQLite 库 + uvicorn 实测 peak 86M, 768M 限制充足 |
 | mixed mode 超时 | `assemble_paper_async` 并发 12 题 × DeepSeek → ~90-300s, 前端 `axios timeout=180s` 见 `spec §11` |
 | AI pipeline 失败 | `DEEPSEEK_API_KEY` 缺失 → graceful fallback 到 "参考答案 + 解析", 不影响考试; 见 `spec §12.3.4` |
 | corporate-strat AI 出题无题 | `corporate_strategy_ai_generated.jsonl` 经 `auto_approve_ai.py` 后必须 `status=approved` 才能 build_db 加载 |

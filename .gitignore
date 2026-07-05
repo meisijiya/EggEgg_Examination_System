@@ -66,3 +66,7 @@ data/final/
 # 运行时 SQLite（v8 P0:fix-25 后 commit a5c4ece 意外入库 — 删出）
 packages/backend/data/app.db
 packages/backend/data/*.db
+
+# Project root runtime SQLite（uvicorn runtime create data/app.db — 修复 commit 4a51b99 后的 untracked）
+data/*.db
+data/**/*.db
