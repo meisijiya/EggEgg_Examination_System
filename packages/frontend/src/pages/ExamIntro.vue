@@ -40,6 +40,9 @@ const TYPE_LABELS: Record<QuestionType, string> = {
   judge: '判断题',
   calc: '计算分析题',
   comprehensive: '综合题',
+  // fix-30b: 5 题型 → 7 题型（补全 Record 完整性，避免 vue-tsc 报错）
+  short_answer: '简答题',
+  case_analysis: '案例分析题',
 };
 
 /** 统计各题型数量（runtime 中 comprehensive 会 fallback 到 calc）。 */

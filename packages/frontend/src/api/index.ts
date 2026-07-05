@@ -52,6 +52,7 @@ export async function login(password: string): Promise<LoginResponse> {
  * 启动一次模拟考(服务端出题 + 写 attempt_answers 占位)。
  *
  * 参数:
+ *   subject_id — fix-30a:多科目隔离必填;后端按科目筛题库。
  *   mode: 'standard'(默认,章节×题型×难度加权)/ 'mixed'(混合模式,
  *         ~30% 题 AI 改编 — fix-20)。
  *
@@ -60,13 +61,14 @@ export async function login(password: string): Promise<LoginResponse> {
  * timeout。
  */
 export async function startExam(
+  subjectId: string,
   mode: 'standard' | 'mixed' = 'standard',
 ): Promise<StartExamResponse> {
   // mixed 后端 worst case:13 LLM calls × 15s 超时 + 网络抖动 ≈ 3min
   const timeoutMs = mode === 'mixed' ? 180_000 : 15_000;
   const { data } = await client.post<StartExamResponse>(
     '/exams/start',
-    { mode },
+    { subject_id: subjectId, mode },
     { timeout: timeoutMs },
   );
   return data;

@@ -5,14 +5,19 @@ fix-22 改造：
 - 新增 `DELETE /exams/{attempt_id}`：级联删除 attempt_answers
 - `get_result` 重写：用 FastAPI Depends 显式注入 asession / qsession，
   确保 attempt_answers 读取与写入同源（消除潜在跨 session 数据漂移）
+
+fix-23a 改造：
+- `start_exam` 接受 `subject_id`（必填），按学科过滤题库
+- subject 不存在 → 400
+- subject 题库为空 → 200 + 空 result + info log
+- `GradedAnswerDetail.options` 字段填充，结果页可显示选项
 """
 from __future__ import annotations
 
 import json
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,11 +25,12 @@ from app.api.auth import get_current_user
 from app.config import get_settings
 from app.models.attempt import AttemptAnswer, ExamAttempt
 from app.models.database import get_app_db, get_db
-from app.models.question import Chapter, Question
+from app.models.question import Chapter, Question, Subject
 from app.schemas import (
     ExamResult,
     ExamSnapshot,
     GradedAnswerDetail,
+    StartExamRequest,
     StartExamResponse,
     SubmitExamRequest,
     SubmitExamResponse,
@@ -32,26 +38,10 @@ from app.schemas import (
     to_json,
     utcnow_iso,
 )
-from app.services.grader import grade_answer, parse_key_points
+from app.services.grader import grade_answer, parse_key_points, parse_options
 from app.services.paper_assembler import assemble_paper_async, build_default_spec
 
 router = APIRouter(prefix="/exams", tags=["exams"])
-
-
-# ---------- Request Schema（fix-22 新增 mode）----------
-
-
-class StartExamRequest(BaseModel):
-    """启动考试请求 — fix-22 新增 `mode` 字段。
-
-    `mode` 控制出题策略：
-    - `standard`（默认）：走原章节×题型×难度加权抽样
-    - `mixed`：混合模式（当前 stub，等同 standard；fix-20 替换为 AI 改编）
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    mode: Literal["standard", "mixed"] = Field(default="standard")
 
 
 # ---------- 章节 / 题目加载 helpers ----------
@@ -99,6 +89,14 @@ async def _load_chapter_codes(qsession: AsyncSession) -> dict[int, str]:
     return {cid: code for cid, code in result.all()}
 
 
+async def _subject_exists(qsession: AsyncSession, subject_id: str) -> bool:
+    """校验 subject_id 是否存在于 subjects 表（qsession / 题库 db）。"""
+    row = await qsession.execute(
+        select(Subject.id).where(Subject.id == subject_id)
+    )
+    return row.first() is not None
+
+
 # ---------- Endpoints ----------
 
 
@@ -113,10 +111,22 @@ async def start_exam(
     fix-22：
     - 接收 `mode` 字段（standard | mixed），转发给 `assemble_paper_async`
     - qsession 仅用于题库读（mixed 模式留给 paper_assembler 内部处理）
+
+    fix-23a：
+    - 接收必填 `subject_id` 字段，按学科过滤题库
+    - subject_id 不存在 → 400（`subject 不存在: {subject_id}`）
+    - subject 题库为空 → 200（创建空 attempt）+ 0 题 + 服务端 info log
     """
     settings = get_settings()
 
-    # 1. 出题 — 走统一入口，mode 控制 standard / mixed
+    # 1. 学科存在性校验（fix-23a P0）— 防止 SubjectSwitcher 切到空学科静默回退
+    if not await _subject_exists(qsession, req.subject_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"subject 不存在: {req.subject_id}",
+        )
+
+    # 2. 出题 — 走统一入口，mode 控制 standard / mixed
     #    mixed 模式必须传 deepseek_client（fix-19 真实实现依赖它）
     deepseek_client = None
     if req.mode == "mixed":
@@ -124,26 +134,29 @@ async def start_exam(
         deepseek_client = get_deepseek_client()
 
     paper = await assemble_paper_async(
-        subject="fin-mgmt",
+        subject=req.subject_id,
         paper_spec=build_default_spec(),
         mode=req.mode,
         deepseek_client=deepseek_client,
     )
+    # fix-23a P0 critical:paper 是 Paper 对象(含 partial/requested/returned),
+    # paper.questions 是 list[dict] raw 题目(含 adapted_* 字段,持久化用)
+    questions = paper.questions
 
-    # 2. 持久化（attempt + answers 占位）— 用应用库独立 session
+    # 3. 持久化（attempt + answers 占位）— 用应用库独立 session
     started_at = utcnow_iso()
     from app.models.database import get_app_session_factory
 
     afactory = get_app_session_factory()
     async with afactory() as asession:
         attempt = ExamAttempt(
-            subject_id="fin-mgmt",
+            subject_id=req.subject_id,
             started_at=started_at,
             submitted_at=None,
             total_score=None,
             score_by_chapter_json=None,
             score_by_type_json=None,
-            question_sequence_json=to_json([q["question_id"] for q in paper]),
+            question_sequence_json=to_json([q["question_id"] for q in questions]),
         )
         asession.add(attempt)
         await asession.flush()
@@ -151,7 +164,7 @@ async def start_exam(
 
         # 题目占位（user_answer=None, awarded_score=0）
         # fix-22 P0：持久化 adapted_payload_json（混合模式改编题）
-        for q in paper:
+        for q in questions:
             is_adapted = bool(q.get("is_adapted"))
             adapted_payload_json: str | None = None
             if is_adapted:
@@ -179,8 +192,9 @@ async def start_exam(
             asession.add(ans)
         await asession.commit()
 
-    # 3. 构造响应（学员视图，隐藏 answer/key_points）
+    # 4. 构造响应（学员视图，隐藏 answer/key_points）
     #    fix-22 P0：透传 is_adapted + source_question_id（前端 UI 标注）
+    #    fix-23a P0 critical:透传 paper 对象(partial/requested/returned) + info_msg
     public_qs = [
         {
             "id": q["question_id"],
@@ -195,8 +209,15 @@ async def start_exam(
             "is_adapted": bool(q.get("is_adapted")),
             "source_question_id": q.get("source_question_id"),
         }
-        for q in paper
+        for q in questions
     ]
+
+    info_msg: str | None = None
+    if paper.partial:
+        info_msg = (
+            f"题库仅含 {paper.returned} 题, 部分组卷, "
+            f"{paper.returned} 标准题已出 (spec 要求 {paper.requested} 题)"
+        )
 
     return StartExamResponse(
         attempt_id=attempt_id,
@@ -204,6 +225,8 @@ async def start_exam(
         time_limit_minutes=build_default_spec().time_limit_minutes,
         questions=public_qs,
         total_score=build_default_spec().total_score,
+        paper=paper,
+        info_msg=info_msg,
     )
 
 
@@ -356,6 +379,8 @@ async def submit_exam(
                 comment=graded_result.comment,
                 sub_answer_count=graded_result.sub_answer_count,
                 missed_points=graded_result.missed_points,
+                # fix-23a:填充选项列表（结果页展示 + 标 ✓ 正确项）
+                options=parse_options(q.options_json),
             )
         )
 
@@ -458,6 +483,8 @@ async def get_result(
                 comment=ans.grading_comment or "",
                 sub_answer_count=sub_answer_count,
                 missed_points=missed_points,
+                # fix-23a:填充选项列表（结果页展示 + 标 ✓ 正确项）
+                options=parse_options(q.options_json),
             )
         )
 

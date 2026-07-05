@@ -16,6 +16,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useExamStore } from '@/stores/exam';
 import QuestionCard from '@/components/QuestionCard.vue';
+import { formatChapterCode } from '@/utils/formatChapterCode';
 import type { QuestionType } from '@/types/api';
 
 const route = useRoute();
@@ -35,6 +36,14 @@ const now = ref<number>(Date.now());
 const remainingSec = computed(() => {
   const ms = exam.deadlineMs() - now.value;
   return Math.max(0, Math.floor(ms / 1000));
+});
+
+/**
+ * fix-30a:当前科目名 — 显示在顶部信息卡。fallback 到"财务管理"以兼容
+ * 历史考试快照(快照可能不携带 subject_id)。
+ */
+const currentSubjectName = computed(() => {
+  return exam.currentSubject?.name ?? '财务管理';
 });
 
 /** 格式化倒计时 HH:MM:SS。 */
@@ -177,6 +186,26 @@ watch(remainingSec, (sec) => {
     handleSubmit(true);
   }
 });
+
+/**
+ * exp-1：当前题目的章节指示器（顶部小条）。
+ * - 跨章节切换时用 prompt 提示学员（仅在切换瞬间，不是常态干扰）
+ * - 同章节内不打扰
+ */
+const currentChapter = computed(() => {
+  const q = exam.questions.find((x) => x.sequence === exam.currentSequence);
+  return q?.chapter_code || '';
+});
+
+/** 上一次的章节（用于检测切换）。 */
+let prevChapter = '';
+watch(currentChapter, (cur) => {
+  if (prevChapter && cur && prevChapter !== cur) {
+    // 跨章节切换时温和提示(不阻塞)— 用 formatChapterCode 转成中文标签
+    ElMessage.info(`已切到 ${formatChapterCode(cur)}`);
+  }
+  prevChapter = cur;
+});
 </script>
 
 <template>
@@ -184,12 +213,26 @@ watch(remainingSec, (sec) => {
     <!-- 顶部固定栏 -->
     <div class="play-header">
       <div class="header-left">
+        <span class="header-subject" data-testid="current-subject">
+          📚 {{ currentSubjectName }} · 共 {{ exam.totalQuestions }} 题
+        </span>
         <span class="header-progress">
           <strong>{{ exam.answeredCount }}</strong> / {{ exam.totalQuestions }} 已答
         </span>
         <span class="header-unanswered" v-if="unansweredCount > 0">
           （未答 {{ unansweredCount }}）
         </span>
+        <!-- exp-1：当前题目章节指示器（蓝色 plain tag，与 QuestionCard 章节 tag 一致） -->
+        <el-tag
+          v-if="currentChapter"
+          size="small"
+          type="info"
+          effect="plain"
+          class="header-chapter"
+          data-testid="current-chapter-tag"
+        >
+          {{ formatChapterCode(currentChapter) }}
+        </el-tag>
       </div>
       <div :class="['timer-display', timerClass]">⏱ {{ remainingText }}</div>
       <div class="header-right">
@@ -298,11 +341,26 @@ watch(remainingSec, (sec) => {
   display: flex;
   align-items: center;
   gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.header-subject {
+  font-size: var(--fs-body);
+  color: var(--sky-active);
+  font-weight: var(--fw-medium);
+  background: var(--sky-soft);
+  padding: 2px var(--s-3);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
 }
 .header-progress strong {
   color: var(--sky-active);
   font: 700 22px / 1 var(--font-display);
   font-variant-numeric: tabular-nums;
+}
+/* exp-1：当前章节 tag 样式（与 .chapter-tag 风格统一） */
+.header-chapter {
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 .header-unanswered {
   color: var(--warning);

@@ -1,16 +1,33 @@
 /**
  * 题型 / 难度 / 角色类型 — 与后端 Pydantic schema 严格对应。
+ *
+ * fix-30b 扩展:增加 short_answer / case_analysis,5 题型 → 7 题型。
+ * 旧 5 种保持兼容(财务管理员侧已有逻辑不动),新 2 种由 QuestionCard 渲染分支处理。
  */
 export type QuestionType =
   | 'single'
   | 'multi'
   | 'judge'
   | 'calc'
-  | 'comprehensive';
+  | 'comprehensive'
+  | 'short_answer'
+  | 'case_analysis';
 
 export type DifficultyLevel = 1 | 2 | 3;
 
 export type UserRole = 'user' | 'admin';
+
+/**
+ * 考试科目 — fix-30a 后端 /api/subjects 返回的字典项。
+ *
+ * id 暂用字面量('fin-mgmt' / 'corp-strat'),便于前端 import 与编译期校验;
+ * 后端若改为自增 ID,这里同步放宽为 string。
+ */
+export interface Subject {
+  id: string;
+  name: string;
+  question_count?: number;
+}
 
 /**
  * 登录请求 / 响应。
@@ -27,6 +44,22 @@ export interface LoginResponse {
 }
 
 /**
+ * 主观题评分量规(case_analysis / 复杂综合题专用) — fix-30b 由后端 grader 扩展时填充。
+ *
+ * 子问题结构:每个子问题有 id / 分值 / 关键要点 / 权重。
+ * conclusion 用于案例分析末尾的总结性论述。
+ */
+export interface QuestionRubric {
+  sub_questions: Array<{
+    id: string;
+    points: number;
+    key_points: string[];
+    weight: number;
+  }>;
+  conclusion: { points: number; criteria: string[] };
+}
+
+/**
  * 题目 — 学员视图（隐藏 answer / key_points / analysis）。
  */
 export interface QuestionPublic {
@@ -39,6 +72,30 @@ export interface QuestionPublic {
   options: string[] | null;
   score: number;
   sequence: number;
+  /**
+   * fix-22 P0 + exp-1: AI 改编标记 — 仅混合模式 (mode='mixed') 改编题为 true。
+   * 后端 `assemble_paper_async` 在 mixed 模式下对 ~30% 题改编后会设置；
+   * 标准模式 / 未改编题为 false（前端 UI 标注 + tooltip 用）。
+   */
+  is_adapted?: boolean;
+  /**
+   * 改编源原题 ID（traceability）。
+   * - 改编题：= 源原题 id（一般 = question.id，但前端不必假设相等）
+   * - 原题 / standard 模式：undefined
+   */
+  source_question_id?: number;
+  /**
+   * fix-30b:case_analysis / 综合大题的子问题评分结构。无 rubric 时按整题文本作答。
+   */
+  rubric?: QuestionRubric;
+}
+
+/**
+ * 启动考试请求 — fix-30a 强制要求 subject_id(多科目隔离)。
+ */
+export interface StartExamRequest {
+  subject_id: string;
+  mode: 'standard' | 'mixed';
 }
 
 /**
@@ -98,6 +155,16 @@ export interface GradedAnswerDetail {
   sub_answer_count?: number;
   /** 主观题扩展：未覆盖关键要点（最多 3 条，仅部分覆盖时填）。 */
   missed_points?: string[];
+  /**
+   * fix-23a:题目选项列表。
+   * - single / multi:有值，列表中的元素按 A/B/C/D... 顺序排列
+   * - judge:有值（['对', '错'] 或 ['A', 'B']）
+   * - calc / comprehensive / short_answer / case_analysis:null
+   *
+   * 结果页渲染：单/多选显示 "A. xxx [✓]" 格式，正确选项打钩；
+   * 判断显示 "对 / 错"；主观题不渲染选项。
+   */
+  options?: string[] | null;
 }
 
 /**
@@ -200,6 +267,45 @@ export interface ReviewUpdateRequest {
 export interface ReviewUpdateResponse {
   question_id: number;
   updated_fields: string[];
+}
+
+/**
+ * fix-30a:Admin review queue 中单条 AI 生成题(待人工审核)。
+ *
+ * 与 ReviewQueueItem 区别:这里专门展示 multi-agent pipeline 的输出。
+ * source_ref 用于回溯引用资料 — 用户硬约束折叠栏默认收起,需展开才看到。
+ */
+export interface AiGeneratedQuestion {
+  id: number;
+  subject_id: string;
+  type: QuestionType;
+  chapter_code: string;
+  difficulty: DifficultyLevel;
+  stem: string;
+  options: string[] | null;
+  generated_answer: string;
+  key_points: string[];
+  confidence: number;
+  /** 来源引用:file = 资料文件名,paragraph_index = 段落序号,snippet = 引用片段原文。 */
+  source_ref: {
+    file: string;
+    paragraph_index: number;
+    snippet: string;
+  };
+  /** Agent pipeline 各 agent 的中间产物 — admin debug 用。 */
+  agent_trace?: Array<{ agent: string; output: string }>;
+}
+
+export interface AiGeneratedQuestionsResponse {
+  items: AiGeneratedQuestion[];
+  total: number;
+}
+
+/**
+ * fix-30a:Admin 拒绝 AI 生成题时的原因说明。
+ */
+export interface AiRejectRequest {
+  reason: string;
 }
 
 /**

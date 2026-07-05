@@ -20,4 +20,5 @@ dependencies = [
 dev = [
     "pytest-asyncio",
     "pytest-cov",
+    "pyyaml>=6.0.3",
 ]

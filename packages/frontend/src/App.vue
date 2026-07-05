@@ -8,10 +8,14 @@
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useExamStore } from '@/stores/exam';
+import SubjectSwitcher from '@/components/SubjectSwitcher.vue';
+import type { Subject } from '@/types/api';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const exam = useExamStore();
 
 /** 是否显示顶部导航（考试中、登录页不显示） */
 const showNav = computed(() => {
@@ -37,6 +41,19 @@ function handleLogout(): void {
   auth.logout();
   router.push('/login');
 }
+
+/**
+ * 切换科目 — 写 store + 跳首页(若当前在 dashboard / admin 不强制跳,只换 context)。
+ *
+ * fix-30a 用户硬约束:切换即生效,所以无脑 push('/'),让 dashboard / result 历史
+ * 自然按新 subject 过滤(后端 dashboard 后续按 subject_id 聚合)。
+ */
+function onSubjectChange(sub: Subject): void {
+  exam.setSubject(sub);
+  if (route.name !== 'home') {
+    router.push('/');
+  }
+}
 </script>
 
 <template>
@@ -46,6 +63,10 @@ function handleLogout(): void {
         <span class="logo-ic"></span>
         <span class="logo-text">答题系统</span>
       </div>
+      <SubjectSwitcher
+        :model-value="exam.currentSubject"
+        @update:model-value="onSubjectChange"
+      />
       <nav class="topnav-nav">
         <a
           class="topnav-link"

@@ -13,7 +13,7 @@
  * - 启动考试时透传 mode 给后端
  * - 时间展示统一走 formatDateTime（强制 Shanghai 时区）
  */
-import { onMounted, ref, defineExpose } from 'vue';
+import { onMounted, ref, defineExpose, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useDashboardStore } from '@/stores/dashboard';
@@ -29,6 +29,14 @@ const starting = ref<boolean>(false);
 const modeDialogVisible = ref<boolean>(false);
 /** 当前选中的模式（el-radio-group v-model）。 */
 const selectedMode = ref<'standard' | 'mixed'>('standard');
+
+/**
+ * fix-30a:当前选中的 subject — 直接读 exam store,与顶栏 SubjectSwitcher 同步。
+ * 若从未选过,fallback 用 id='fin-mgmt'(单科目兜底)。
+ */
+const currentSubjectName = computed(() => {
+  return exam.currentSubject?.name ?? '财务管理';
+});
 
 onMounted(async () => {
   await dashboard.fetch();
@@ -150,9 +158,14 @@ defineExpose({
     </el-row>
 
     <div class="section-card start-card">
+      <div class="subject-tag">
+        <el-tag size="large" type="info" effect="dark">
+          📚 当前科目: {{ currentSubjectName }}
+        </el-tag>
+      </div>
       <h2>开始一次模拟考</h2>
       <p class="start-desc">
-        系统将按章节×题型×难度三维加权，从 9 章题库中抽取 41 道题（共 110 分，限时 120 分钟）。
+        系统将按章节×题型×难度三维加权，从该科目题库中抽取 41 道题（共 110 分，限时 120 分钟）。
       </p>
       <el-button
         type="primary"
@@ -279,6 +292,19 @@ defineExpose({
   background:
     linear-gradient(135deg, var(--sky-soft), var(--sunrise-soft));
   border: 1px solid var(--sky-fog);
+}
+.subject-tag {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--s-3);
+}
+.subject-tag :deep(.el-tag) {
+  font-size: var(--fs-body-lg);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--surface) !important;
+  color: var(--sky-active) !important;
+  border: 1.5px solid var(--sky) !important;
 }
 .start-card h2 {
   margin: 0 0 var(--s-2);

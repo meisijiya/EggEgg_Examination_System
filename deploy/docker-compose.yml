@@ -18,6 +18,10 @@
 #   git pull && docker compose -f deploy/docker-compose.yml build && \
 #   docker compose -f deploy/docker-compose.yml up -d
 
+# 显式 project name — 顶层 key (compose v2)。
+# `docker compose -p <name>` / `docker ps` 都会用到, 默认是目录名, 显式声明后稳定可控。
+name: egg-egg-exam-system
+
 services:
   finance-exam:
     # 镜像构建上下文与 Dockerfile 位置
@@ -33,13 +37,18 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
-    # 数据持久化 — 把宿主 data/ 挂到容器 /app/data
-    # 容器内:
-    #   /app/data/final/finance.db   — 题库 (运行时只读)
-    #   /app/data/app.db             — 应用库 (考试记录 / 用户进度, 写入)
-    # 备份策略: 定期 tar czf app.db.tgz data/app.db + 同步到 OSS
+    # === Runtime data override (双层策略) ===
+    # finance.db build-time 已 COPY 入 image (见 Dockerfile)
+    # 云服务器 mount 自定义 db 覆盖 image 内置版本即可更新题库
+    # 如无需更新, image 内置版本即可用
     volumes:
       - ../data:/app/data:rw
+
+    # 项目元信息标签 — `docker inspect` / `docker ps` 一眼可见版本 + 数据策略
+    labels:
+      - "com.egg-egg-exam-system.version=1.0"
+      - "com.egg-egg-exam-system.data-baked=true"
+      - "com.egg-egg-exam-system.runtime-mount=true"
 
     # 环境变量 — 从项目根 .env 读取
     # 该文件不入 git; 部署前 cp .env.example .env 再填真实值

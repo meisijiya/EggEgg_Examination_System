@@ -21,6 +21,7 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { useDashboardStore } from '@/stores/dashboard';
+import { formatChapterCode } from '@/utils/formatChapterCode';
 import { deleteExam } from '@/api';
 import { formatDateTime, formatDate } from '@/utils/format';
 
@@ -97,7 +98,7 @@ const radarOption = computed(() => {
     title: { text: '章节平均得分', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: {},
     radar: {
-      indicator: codes.map((c) => ({ name: c, max: 25 })),
+      indicator: codes.map((c) => ({ name: formatChapterCode(c), max: 25 })),
       radius: '65%',
     },
     series: [

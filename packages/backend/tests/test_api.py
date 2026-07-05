@@ -105,7 +105,7 @@ class TestExamFlow:
         r = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         )
         assert r.status_code == 201
         d = r.json()
@@ -122,7 +122,7 @@ class TestExamFlow:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         r = client.get(
@@ -147,7 +147,7 @@ class TestExamFlow:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         questions = start["questions"]
@@ -187,7 +187,7 @@ class TestExamFlow:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         # 第一次交卷
@@ -209,7 +209,7 @@ class TestExamFlow:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         r = client.post(
@@ -226,7 +226,7 @@ class TestExamFlow:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         client.post(
@@ -247,7 +247,7 @@ class TestExamFlow:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         r = client.get(
@@ -268,7 +268,7 @@ class TestExamFlow:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         questions = start["questions"]
@@ -327,7 +327,7 @@ class TestStartExamMode:
         r = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         )
         assert r.status_code == 201
         assert "attempt_id" in r.json()
@@ -336,7 +336,7 @@ class TestStartExamMode:
         r = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={"mode": "standard"},
+            json={"subject_id": "fin-mgmt", "mode": "standard"},
         )
         assert r.status_code == 201
         assert "attempt_id" in r.json()
@@ -346,7 +346,7 @@ class TestStartExamMode:
         r = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={"mode": "mixed"},
+            json={"subject_id": "fin-mgmt", "mode": "mixed"},
         )
         assert r.status_code == 201
         d = r.json()
@@ -357,7 +357,7 @@ class TestStartExamMode:
         r = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={"mode": "garbage"},
+            json={"subject_id": "fin-mgmt", "mode": "garbage"},
         )
         assert r.status_code == 422
 
@@ -369,7 +369,7 @@ class TestDeleteExam:
         r = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         )
         return r.json()["attempt_id"]
 
@@ -452,7 +452,7 @@ class TestDashboard:
             start = client.post(
                 "/exams/start",
                 headers={"Authorization": f"Bearer {_user_token()}"},
-                json={},
+                json={"subject_id": "fin-mgmt"},
             ).json()
             client.post(
                 f"/exams/{start['attempt_id']}/submit",
@@ -510,7 +510,7 @@ class TestExplainStub:
         start = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={},
+            json={"subject_id": "fin-mgmt"},
         ).json()
         attempt_id = start["attempt_id"]
         client.post(

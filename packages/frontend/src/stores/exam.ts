@@ -19,12 +19,16 @@ import type {
   QuestionPublic,
   StartExamResponse,
   SubmitExamResponse,
+  Subject,
 } from '@/types/api';
 
 /** localStorage 中草稿的 key（按 attempt_id 区分）。 */
 function draftKey(attemptId: number): string {
   return `fes_draft_${attemptId}`;
 }
+
+/** localStorage 中当前选中 subject 的 key。 */
+const CURRENT_SUBJECT_KEY = 'fes_current_subject';
 
 export const useExamStore = defineStore('exam', () => {
   // ---------- state ----------
@@ -39,6 +43,24 @@ export const useExamStore = defineStore('exam', () => {
   const currentSequence = ref<number>(1);
   /** 已提交结果缓存（result 页用） */
   const lastResult = ref<SubmitExamResponse | null>(null);
+  /**
+   * fix-30a:当前选中科目 — 顶栏 SubjectSwitcher 写入,startNew 时读出。
+   * 持久化到 localStorage,刷新后保留用户上次选择。
+   */
+  const currentSubject = ref<Subject | null>(null);
+
+  // ---------- 初始化:从 localStorage 恢复 subject ----------
+  try {
+    const raw = localStorage.getItem(CURRENT_SUBJECT_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Subject;
+      if (parsed && typeof parsed.id === 'string' && typeof parsed.name === 'string') {
+        currentSubject.value = parsed;
+      }
+    }
+  } catch {
+    // 静默 — 解析失败就用 null,UI 走兜底
+  }
 
   // ---------- getters ----------
 
@@ -72,6 +94,7 @@ export const useExamStore = defineStore('exam', () => {
    * 启动一次新考试（POST /exams/start）。
    *
    * 参数:
+   *   subjectId — fix-30a 多科目隔离;默认读 store.currentSubject.id
    *   mode: 'standard'（默认）/ 'mixed' — 转发给后端
    *
    * 防御:启动前校验 localStorage 中有 token,避免用空 token 发起请求
@@ -80,14 +103,42 @@ export const useExamStore = defineStore('exam', () => {
    */
   async function startNew(
     mode: 'standard' | 'mixed' = 'standard',
+    subjectId?: string,
   ): Promise<StartExamResponse> {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
       throw new Error('登录已过期，请重新登录');
     }
-    const resp = await startExam(mode);
+    // ponytail: 优先用显式参数,其次 store 状态,再不行兜底为 'fin-mgmt'
+    // 让 fix-30a 后端未就绪时不至于 422
+    const sid = subjectId ?? currentSubject.value?.id ?? 'fin-mgmt';
+    const resp = await startExam(sid, mode);
     applyStartResponse(resp);
     return resp;
+  }
+
+  /**
+   * 设置当前选中科目 — 顶栏 SubjectSwitcher 触发,持久化到 localStorage。
+   */
+  function setSubject(s: Subject): void {
+    currentSubject.value = s;
+    try {
+      localStorage.setItem(CURRENT_SUBJECT_KEY, JSON.stringify(s));
+    } catch {
+      // 静默 — 隐私模式 / quota 满不影响当前会话
+    }
+  }
+
+  /**
+   * 清空当前科目 — logout / 切换失败时调用。
+   */
+  function clearSubject(): void {
+    currentSubject.value = null;
+    try {
+      localStorage.removeItem(CURRENT_SUBJECT_KEY);
+    } catch {
+      // 静默
+    }
   }
 
   /**
@@ -224,6 +275,7 @@ export const useExamStore = defineStore('exam', () => {
 
   /**
    * 重置整个 store（用于交卷后或重新开始）。
+   * 注意:不重置 currentSubject — 用户的科目选择跨考试保持。
    */
   function reset(): void {
     attemptId.value = null;
@@ -246,6 +298,7 @@ export const useExamStore = defineStore('exam', () => {
     answers,
     currentSequence,
     lastResult,
+    currentSubject,
     // getters
     answeredCount,
     totalQuestions,
@@ -253,6 +306,8 @@ export const useExamStore = defineStore('exam', () => {
     currentQuestion,
     // actions
     startNew,
+    setSubject,
+    clearSubject,
     applyStartResponse,
     loadExisting,
     setAnswer,

@@ -11,6 +11,15 @@
 - `mode='mixed'`：fix-20 真实 AI 改编（~30% 题改编 + 防幻觉护栏）
   fix-22 P0 优化：asyncio.gather 并发执行改编（DeepSeek API 调用并发），
   从串行 60-96s 降到 ~10-15s。
+
+fix-23a:多学科支持 — PaperAssembler 接受 `subject` 参数，
+按 `Question.subject_id` 过滤题库。`None` 表示不过滤（legacy 兼容）。
+
+fix-23a P0 critical partial-fill:题库题数 < spec 要求时,assemble() 不再
+抛 RuntimeError,改为 break 退出循环返回已选题目;assemble_paper_async
+包装为 `Paper(questions=..., partial=True, requested=spec, returned=len)`。
+绝不抛 RuntimeError — 防御性设计,避免 SubjectSwitcher 切到
+corp-strat(20 题 < spec 41) 时整个 start_exam 接口挂掉。
 """
 from __future__ import annotations
 
@@ -26,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import get_session_factory
 from app.models.question import Chapter, Question
+from app.schemas import Paper
 
 logger = logging.getLogger("fes.paper_assembler")
 
@@ -123,6 +133,7 @@ class PaperAssembler:
         db: AsyncSession,
         rng: random.Random | None = None,
         spec: PaperSpec | None = None,
+        subject: str | None = None,
     ) -> None:
         """初始化。
 
@@ -130,10 +141,13 @@ class PaperAssembler:
             db: 异步数据库 session
             rng: 随机数生成器（注入便于测试）
             spec: 试卷规格，默认用 build_default_spec()
+            subject: 学科 ID（fix-23a）— 按 Question.subject_id 过滤题库。
+                `None` 表示不过滤（legacy 兼容；老调用方 / 单元测试可用）。
         """
         self.db = db
         self.rng = rng or random.Random()
         self.spec = spec or build_default_spec()
+        self.subject = subject
 
     # ----- 公开 API -----
 
@@ -184,10 +198,20 @@ class PaperAssembler:
                 if slot.type == "comprehensive":
                     q = self._pick_from_pool(pool, q_type="calc", exclude_ids=picked_ids)
             if q is None:
-                # 缺口 4：题型都无，跨题型兜底
+                # 缺口 4:题型都无,跨题型兜底
                 q = self._pick_any(pool, exclude_ids=picked_ids)
             if q is None:
-                raise RuntimeError(f"题库为空，无法生成试卷（slot={slot}）")
+                # fix-23a P0 critical:题库不足 partial-fill — 不再 throw RuntimeError,
+                # break 退出循环,返回已选题目;assemble_paper_async 标记 partial=True
+                # ponytail: 之前是 raise RuntimeError,SubjectSwitcher 切到 corp-strat
+                # (20 题) 组卷到 slot 21 时整个 start_exam 接口 500。
+                logger.info(
+                    "PaperAssembler.assemble partial-fill: picked=%d < spec=%d, slot=%s 无候选,退出循环",
+                    len(picked),
+                    self.spec.total_questions,
+                    slot,
+                )
+                break
             picked.append(q)
             picked_ids.add(q.id)
 
@@ -226,8 +250,15 @@ class PaperAssembler:
         return list(result.scalars().all())
 
     async def _load_questions(self) -> list[Question]:
-        """加载所有题目。"""
-        result = await self.db.execute(select(Question))
+        """加载题目 — fix-23a 按 self.subject 过滤题库。
+
+        - `subject` 为 None → 不过滤（legacy 行为）
+        - `subject` 字符串 → WHERE Question.subject_id == self.subject
+        """
+        stmt = select(Question)
+        if self.subject is not None:
+            stmt = stmt.where(Question.subject_id == self.subject)
+        result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
     def _build_pool(self, questions: list[Question]) -> dict[tuple[int, str, int], list[Question]]:
@@ -545,11 +576,12 @@ async def assemble_paper_async(
     paper_spec: PaperSpec,
     mode: str = "standard",
     deepseek_client: object | None = None,
-) -> list[dict]:
+) -> Paper:
     """统一出题入口 — 按 mode 路由到标准 / 混合实现。
 
     参数:
-        subject: 学科 ID（当前仅 'fin-mgmt'，预留多学科扩展）。
+        subject: 学科 ID（fix-23a 必填）— PaperAssembler 按此过滤题库。
+            'fin-mgmt' | 'corp-strat' | 后续新增。
         paper_spec: 试卷规格（章节 / 题型 / 分值 / 时长等）。
         mode: 'standard'（默认）走原 `PaperAssembler.assemble()`；
               'mixed' 走 AI 改编分支（fix-20 实现,~30% 题改编 +
@@ -559,23 +591,71 @@ async def assemble_paper_async(
             is_adapted 标记,避免误标)。
 
     返回:
-        与 `PaperAssembler.assemble()` 一致的题目字典列表（按 sequence 排序）。
-        字段：`sequence / question_id / type / chapter_id / chapter_code /
-        difficulty / stem / options / score`。mixed 模式下被改编的题额外含
-        `is_adapted / source_question_id / adapted_answer /
-        adapted_key_points / adapted_analysis`。
+        `Paper` 对象:
+        - `questions`:list[dict] — 题目 raw 字典(可能少于 spec 要求);
+          含混合模式的 adapted_* 字段(exams.py 持久化用)
+        - `partial`:True 当题库不足 spec
+        - `requested`:spec 期望的题数(= paper_spec.total_questions)
+        - `returned`:实际返回的题数(= len(questions))
+
+    特殊（fix-23a P0 critical）:
+        - subject 题库为空(corp-strat 0 题):返回 `Paper(questions=[], partial=True, requested=N, returned=0)`
+        - subject 题库 < spec(corp-strat 20 题 vs spec 41):partial-fill,
+          返回 `Paper(questions=[20题], partial=True, requested=41, returned=20)`
+        - 绝不抛 RuntimeError(防御性) — SubjectSwitcher 切到任何学科都能 2xx
 
     抛出:
         ValueError: 当 mode 取值非法时（防御性 validate_mode 会先回退，
             此处保留抛错以暴露上游 bug）。
     """
     mode = validate_mode(mode)
+    requested = paper_spec.total_questions
     # 单 session 复用 — 标准与 mixed 共用同一查询,避免双开 session。
     factory = get_session_factory()
     async with factory() as session:
         rng = random.Random()
-        assembler = PaperAssembler(session, rng=rng, spec=paper_spec)
+        assembler = PaperAssembler(session, rng=rng, spec=paper_spec, subject=subject)
+
+        # fix-23a:空题库短路 — 返回 partial Paper(避免 500 异常冒泡)
+        # ponytail: 之前是 assemble 内部抛 RuntimeError,上游 (exams.py)
+        # 需要 try/except。现在在统一入口先 check,上游不用关心。
+        pool_questions = await assembler._load_questions()
+        if not pool_questions:
+            logger.info(
+                "assemble_paper_async: subject=%s 题库为空,返回 partial Paper(0 题)",
+                subject,
+            )
+            return Paper(
+                questions=[],
+                partial=True,
+                requested=requested,
+                returned=0,
+            )
+
         if mode == "standard":
-            return await assembler.assemble()
-        # mode == "mixed":真实 AI 改编(防幻觉护栏见 adapt_service)
-        return await _mixed_branch(assembler, deepseek_client)
+            raw_questions = await assembler.assemble()
+        else:
+            # mode == "mixed":真实 AI 改编(防幻觉护栏见 adapt_service)
+            raw_questions = await _mixed_branch(assembler, deepseek_client)
+
+        # fix-23a P0 critical:partial-fill 检测 — 题库不足 spec 时不抛错
+        # 返回 partial Paper,让调用方决定是否继续(目前 exams.py 总是接受)
+        returned = len(raw_questions)
+        partial = returned < requested
+        if partial:
+            logger.info(
+                "paper assembler partial-fill: requested %d, returned %d (subject=%s, mode=%s)",
+                requested,
+                returned,
+                subject,
+                mode,
+            )
+        # raw dict(含 adapted_*)直接进 Paper.questions — exams.py 持久化时需要
+        # adapted_answer/adapted_key_points/adapted_analysis 字段构造
+        # adapted_payload_json(submit/result 端点判分用)
+        return Paper(
+            questions=raw_questions,
+            partial=partial,
+            requested=requested,
+            returned=returned,
+        )

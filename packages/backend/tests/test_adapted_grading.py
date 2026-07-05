@@ -184,7 +184,7 @@ def _start_mixed_with_adaptive(
         r = client.post(
             "/exams/start",
             headers={"Authorization": f"Bearer {_user_token()}"},
-            json={"mode": "mixed"},
+            json={"subject_id": "fin-mgmt", "mode": "mixed"},
         )
     finally:
         ds_mod.get_deepseek_client = original_get

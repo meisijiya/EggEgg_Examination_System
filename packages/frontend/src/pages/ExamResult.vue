@@ -28,6 +28,7 @@ import QuestionCard from '@/components/QuestionCard.vue';
 import ExplainPanel from '@/components/ExplainPanel.vue';
 import { useExamStore } from '@/stores/exam';
 import { formatDateTime } from '@/utils/format';
+import { formatChapterCode } from '@/utils/formatChapterCode';
 
 echarts.use([
   RadarChart,
@@ -64,6 +65,8 @@ const TYPE_LABELS: Record<string, string> = {
   judge: '判断',
   calc: '计算',
   comprehensive: '综合',
+  short_answer: '简答',        // fix-30 新增(2 题型扩展顺手补全)
+  case_analysis: '案例分析',   // fix-30 新增
 };
 
 onMounted(async () => {
@@ -91,7 +94,7 @@ onMounted(async () => {
 const chapterRadarData = computed(() => {
   if (!result.value) return { indicators: [], values: [] };
   const codes = Object.keys(result.value.score_by_chapter).sort();
-  const indicators = codes.map((c) => ({ name: c, max: 25 })); // 粗略 max
+  const indicators = codes.map((c) => ({ name: formatChapterCode(c), max: 25 })); // 粗略 max
   const values = codes.map(
     (c) => result.value!.score_by_chapter[c] ?? 0,
   );
@@ -282,6 +285,15 @@ function restartExam(): void {
                 >
                   {{ TYPE_LABELS[a.type] || a.type }}
                 </el-tag>
+                <el-tag
+                  v-if="a.chapter_code"
+                  size="small"
+                  type="info"
+                  effect="plain"
+                  class="qa-chapter"
+                >
+                  {{ formatChapterCode(a.chapter_code) }}
+                </el-tag>
                 <span class="qa-seq">第 {{ a.sequence }} 题</span>
                 <span class="qa-stem-text">{{ a.stem.slice(0, 40) }}{{ a.stem.length > 40 ? '...' : '' }}</span>
                 <span class="qa-score">{{ a.awarded_score }} / {{ a.full_score }} 分</span>
@@ -302,7 +314,10 @@ function restartExam(): void {
                   chapter_code: a.chapter_code,
                   difficulty: 1,
                   stem: a.stem,
-                  options: null,
+                  // fix-23a:接入后端 GradedAnswerDetail.options（之前硬编码 null）
+                  // single/multi 显示 'A. xxx' 选项;judge 显示 '对/错';
+                  // calc/comprehensive/short_answer/case_analysis 后端返 null
+                  options: a.options ?? null,
                   score: a.full_score,
                   sequence: a.sequence,
                 }"
@@ -428,6 +443,10 @@ function restartExam(): void {
   color: var(--muted);
   font-size: var(--fs-caption);
   font-family: var(--font-mono);
+}
+/* exp-1：折叠标题里的章节标识（蓝色 plain tag，与 QuestionCard 风格统一） */
+.qa-chapter {
+  letter-spacing: 0.02em;
 }
 .qa-stem-text {
   color: var(--fg);

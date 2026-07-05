@@ -15,6 +15,7 @@
  */
 import { computed } from 'vue';
 import type { QuestionPublic, QuestionType } from '@/types/api';
+import { formatChapterCode } from '@/utils/formatChapterCode';
 
 interface Props {
   question: QuestionPublic;
@@ -45,6 +46,9 @@ const typeLabel = computed(() => {
     judge: '判断',
     calc: '计算',
     comprehensive: '综合',
+    // fix-30b: 5 题型 → 7 题型（补全 Record 完整性，避免 vue-tsc 报错）
+    short_answer: '简答',
+    case_analysis: '案例分析',
   };
   return map[props.question.type];
 });
@@ -93,9 +97,102 @@ function onTextInput(value: string): void {
 /** 判断题：对/错。 */
 const judgeOptions = ['对', '错'];
 
-/** 题目是否主观（计算/综合）。 */
+/**
+ * 题目是否主观（计算/综合/简答/案例分析）。
+ * 结果页判定需要这个,因为主观题不显示"正确/错误"对错标记。
+ */
 const isSubjective = computed(() => {
-  return props.question.type === 'calc' || props.question.type === 'comprehensive';
+  const t = props.question.type;
+  return t === 'calc' || t === 'comprehensive' || t === 'short_answer' || t === 'case_analysis';
+});
+
+/**
+ * fix-30b:case_analysis 答案解析。
+ *
+ * 提交时构造 `{sub_answers: {sq_id: text}, conclusion: text}` JSON 字符串。
+ * store 收到的 user_answer 是 JSON string,grader 端按题型 parse。
+ */
+interface CaseAnswer {
+  sub_answers: Record<string, string>;
+  conclusion: string;
+}
+
+/** 把 userAnswer(JSON 字符串)反序列化为结构 — 解析失败时返回空结构。 */
+const parsedCaseAnswer = computed<CaseAnswer>(() => {
+  if (props.question.type !== 'case_analysis') {
+    return { sub_answers: {}, conclusion: '' };
+  }
+  try {
+    const raw = props.userAnswer ?? '';
+    if (!raw) return { sub_answers: {}, conclusion: '' };
+    const parsed = JSON.parse(raw) as Partial<CaseAnswer>;
+    return {
+      sub_answers: parsed.sub_answers ?? {},
+      conclusion: parsed.conclusion ?? '',
+    };
+  } catch {
+    // 历史脏数据(用户曾以字符串形式输入过)兜底
+    return { sub_answers: {}, conclusion: '' };
+  }
+});
+
+/**
+ * 子问题作答回调 — 把当前所有子问题答案 + conclusion 重新组装为 JSON 字符串 emit。
+ */
+function onSubQuestionChange(sqId: string, value: string): void {
+  if (props.readonly) return;
+  const next: CaseAnswer = {
+    ...parsedCaseAnswer.value,
+    sub_answers: { ...parsedCaseAnswer.value.sub_answers, [sqId]: value ?? '' },
+  };
+  emit('update:answer', props.question.id, JSON.stringify(next));
+}
+
+/** conclusion 变更回调。 */
+function onConclusionChange(value: string): void {
+  if (props.readonly) return;
+  const next: CaseAnswer = {
+    ...parsedCaseAnswer.value,
+    conclusion: value ?? '',
+  };
+  emit('update:answer', props.question.id, JSON.stringify(next));
+}
+
+/**
+ * 简答题关键要点提示 — 从 rubric 提取(无 rubric 时不显示)。
+ * case_analysis 也可复用,只在子问题标题旁展示。
+ */
+const keyPointsHint = computed(() => {
+  const r = props.question.rubric;
+  if (!r) return '';
+  // 简答题:所有 sub_questions key_points 取并集;无 sub_questions 时取 conclusion criteria
+  const points: string[] = [];
+  for (const sq of r.sub_questions) {
+    points.push(...sq.key_points);
+  }
+  if (points.length === 0) {
+    points.push(...r.conclusion.criteria);
+  }
+  return points.slice(0, 5).join('；');
+});
+
+/**
+ * 是否 AI 改编题（exp-1 修复，前端仅显示标识）。
+ * 后端 QuestionPublic.is_adapted 仅混合模式 (mode='mixed') 改编题为 true；
+ * 标准模式 / 原题均为 undefined / false。
+ */
+const isAdapted = computed(() => Boolean(props.question.is_adapted));
+
+/**
+ * AI 改编 tooltip 文案 — 包含 source_question_id 让用户能追溯到源原题。
+ * 后端 source_question_id 缺失时降级为通用提示。
+ */
+const adaptedTooltip = computed(() => {
+  const src = props.question.source_question_id;
+  if (src && src !== props.question.id) {
+    return `本题目由 AI 基于原题 #${src} 改编（保留原考点 + 答案等价）`;
+  }
+  return '本题目由 AI 基于原题改编（保留原考点 + 答案等价）';
 });
 
 /** 判分结果（结果页用）。 */
@@ -120,6 +217,32 @@ const isCorrect = computed(() => {
       <el-tag size="small" effect="plain">难度: {{ difficultyLabel }}</el-tag>
       <el-tag size="small" effect="plain" type="info">第 {{ question.sequence }} 题</el-tag>
       <el-tag size="small" type="info">分值: {{ question.score }} 分</el-tag>
+      <!-- exp-1：章节标识（后端 chapter_code 已透传，前端首次显示） -->
+      <el-tag
+        v-if="question.chapter_code"
+        size="small"
+        type="info"
+        effect="plain"
+        class="chapter-tag"
+      >
+        {{ formatChapterCode(question.chapter_code) }}
+      </el-tag>
+      <!-- exp-1：AI 改编徽章 — 仅混合模式改编题显示 -->
+      <el-tooltip
+        v-if="isAdapted"
+        :content="adaptedTooltip"
+        placement="top"
+      >
+        <el-tag
+          type="primary"
+          size="small"
+          effect="dark"
+          class="ai-badge"
+          data-testid="ai-adapted-badge"
+        >
+          AI 改编
+        </el-tag>
+      </el-tooltip>
       <span v-if="showCorrect && isCorrect === true" class="answer-correct">✓ 正确</span>
       <span v-else-if="showCorrect && isCorrect === false" class="answer-wrong">✗ 错误</span>
     </div>
@@ -153,7 +276,7 @@ const isCorrect = computed(() => {
     </div>
 
     <!-- 主观题：计算 / 综合 -->
-    <div v-else>
+    <div v-else-if="question.type === 'calc' || question.type === 'comprehensive'">
       <el-input
         type="textarea"
         :model-value="userAnswer ?? ''"
@@ -162,6 +285,69 @@ const isCorrect = computed(() => {
         placeholder="请按 '1.xxx；2.xxx；...' 格式分小问作答（按习惯写也行，自动识别）"
         @update:model-value="onTextInput"
       />
+    </div>
+
+    <!-- 主观题：简答题（fix-30b：textarea + 字数提示 + 关键点评分提示） -->
+    <div v-else-if="question.type === 'short_answer'">
+      <div data-testid="short-answer-input">
+        <el-input
+          type="textarea"
+          :model-value="userAnswer ?? ''"
+          :readonly="readonly"
+          :rows="4"
+          maxlength="1000"
+          show-word-limit
+          placeholder="请简要作答（建议 100-300 字）"
+          @update:model-value="onTextInput"
+        />
+      </div>
+      <small v-if="keyPointsHint" class="keypoints-hint">
+        💡 提示：答案应覆盖关键点 — {{ keyPointsHint }}
+      </small>
+    </div>
+
+    <!-- 主观题：案例分析（fix-30b：多子问题 textarea + conclusion textarea） -->
+    <div v-else-if="question.type === 'case_analysis'" class="case-analysis">
+      <div
+        v-for="sq in (question.rubric?.sub_questions ?? [])"
+        :key="sq.id"
+        class="sub-question"
+        :data-testid="`case-sub-${sq.id}`"
+      >
+        <h4 class="sub-q-title">
+          子问题 {{ sq.id }}
+          <span class="sub-q-points">({{ sq.points }} 分)</span>
+        </h4>
+        <el-input
+          type="textarea"
+          :model-value="parsedCaseAnswer.sub_answers[sq.id] ?? ''"
+          :readonly="readonly"
+          :rows="6"
+          maxlength="1500"
+          show-word-limit
+          :placeholder="`作答子问题 ${sq.id}...`"
+          @update:model-value="(v: string) => onSubQuestionChange(sq.id, v)"
+        />
+        <small v-if="sq.key_points.length" class="keypoints-hint">
+          💡 关键点: {{ sq.key_points.join('；') }}
+        </small>
+      </div>
+      <div v-if="question.rubric?.conclusion" class="sub-question" data-testid="case-conclusion">
+        <h4 class="sub-q-title">
+          结论
+          <span class="sub-q-points">({{ question.rubric.conclusion.points }} 分)</span>
+        </h4>
+        <el-input
+          type="textarea"
+          :model-value="parsedCaseAnswer.conclusion"
+          :readonly="readonly"
+          :rows="4"
+          maxlength="800"
+          show-word-limit
+          placeholder="请给出综合结论..."
+          @update:model-value="onConclusionChange"
+        />
+      </div>
     </div>
 
     <!-- 结果页：正确答案 + 评语 -->
@@ -206,6 +392,18 @@ const isCorrect = computed(() => {
 .qcard-header :deep(.el-tag) {
   border-radius: var(--r-sm);
   font-weight: var(--fw-medium);
+}
+
+/* exp-1：章节标识 — 不抢眼，仅作辅助 meta（effect=plain 蓝色） */
+.chapter-tag {
+  letter-spacing: 0.02em;
+}
+
+/* exp-1：AI 改编徽章 — 深色 primary 强视觉锚点，仅混合模式改编题 */
+.ai-badge {
+  margin-left: auto;  /* 推到 header 右侧，与 answer-correct/wrong 对齐 */
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
 }
 
 .question-stem {
@@ -268,6 +466,43 @@ const isCorrect = computed(() => {
 
 .answer-correct { color: var(--success); font-weight: var(--fw-semibold); }
 .answer-wrong   { color: var(--danger);  font-weight: var(--fw-semibold); }
+
+/* fix-30b：主观题提示与子问题块 */
+.keypoints-hint {
+  display: block;
+  margin-top: var(--s-2);
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  background: var(--surface-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  border-left: 3px solid var(--sky);
+}
+
+.case-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+.sub-question {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: var(--s-4) var(--s-5);
+}
+.sub-q-title {
+  margin: 0 0 var(--s-3);
+  font: var(--fw-semibold) var(--fs-body-lg) / 1.3 var(--font-display);
+  color: var(--fg);
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.sub-q-points {
+  font: 400 var(--fs-caption) / 1 var(--font-mono);
+  color: var(--sky-active);
+  font-weight: var(--fw-medium);
+}
 
 @media (max-width: 720px) {
   .qcard { padding: var(--s-5) var(--s-4); }

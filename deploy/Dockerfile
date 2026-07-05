@@ -84,6 +84,12 @@ COPY packages/backend/alembic.ini /app/alembic.ini
 # 复制前端 dist (从 Stage 1)
 COPY --from=frontend-builder /build/dist /app/static
 
+# === Build-time baked data ===
+# finance.db contains 628 questions (fin-mgmt 565 + corp-strat 63) across 2 subjects.
+# 双层策略: 此 build-time COPY 保证全新拉起即可用;
+# runtime 云服务器 mount 自定义 db 可覆盖（见 docker-compose.yml volume）。
+COPY data/final/finance.db /app/data/final/finance.db
+
 # 容器内 /app/data 用于 SQLite 持久化
 # docker-compose.yml 通过 volume 挂载 -v ./data:/app/data
 # 注意: 容器内 UID/GID 与宿主不一定一致, 这里不强制 chown

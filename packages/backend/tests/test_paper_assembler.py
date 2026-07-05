@@ -58,14 +58,24 @@ async def _run_once(rng_seed: int) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_basic_assemble(db_session: AsyncSession):
-    """单次抽题 — 基本结构正确性。"""
+async def test_basic_assemble(
+    db_session: AsyncSession, live_fin_mgmt_count: int
+):
+    """单次抽题 — fin-mgmt 题型结构正确性 + spec 全填。
+
+    Phase 2-final:显式 subject='fin-mgmt' 隔离 corp-strat(Lane-C 新题型)。
+    fin-mgmt 仍仅 4 种题型 (single/multi/judge/calc),comprehensive 走 fallback → 6 calc。
+    """
+    # 防御性:确保 fin-mgmt ≥ 41(spec total),退化检测
+    assert live_fin_mgmt_count >= 41, (
+        f"fin-mgmt 题数被改: {live_fin_mgmt_count} (期望 ≥ 41)"
+    )
     rng = random.Random(42)
-    assembler = PaperAssembler(db_session, rng=rng)
+    assembler = PaperAssembler(db_session, rng=rng, subject="fin-mgmt")
     paper = await assembler.assemble()
 
     assert len(paper) == 41
-    # 题型占比 — 数据集只有 4 种，comprehensive → calc fallback
+    # 题型占比 — fin-mgmt 数据集只有 4 种,comprehensive → calc fallback
     types = Counter(p["type"] for p in paper)
     assert types["single"] == 15
     assert types["multi"] == 10
@@ -297,12 +307,154 @@ async def test_mixed_key_points_guard_rejects_creation():
 
 
 @pytest.mark.asyncio
+async def test_paper_assembler_subject_filter(
+    live_fin_mgmt_count: int, live_corp_strat_count: int
+):
+    """fix-23a P0 critical:PaperAssembler(subject=...) 按 subject 隔离题库。
+
+    ponytail: 之前 PaperAssembler 没有 subject 参数,assemble_paper_async 接受
+    subject 但丢弃 — SubjectSwitcher 切到 corp-strat 静默回退到 fin-mgmt。
+    此测试验证 subject 参数真正生效。
+
+    Phase 2-final:用 live_fin_mgmt_count / live_corp_strat_count fixtures 取真实题数
+    替代 hardcoded 数字,允许 rerun 后继续 pass。
+    """
+    factory = get_session_factory()
+    async with factory() as db:
+        # fin-mgmt 过滤 — 大量
+        assembler_fin = PaperAssembler(db, subject="fin-mgmt")
+        qs_fin = await assembler_fin._load_questions()
+        # 断言:全部题都是 fin-mgmt
+        assert all(q.subject_id == "fin-mgmt" for q in qs_fin), (
+            f"fin-mgmt 过滤失败:含其他学科题 {[q.subject_id for q in qs_fin if q.subject_id != 'fin-mgmt'][:3]}"
+        )
+        assert len(qs_fin) == live_fin_mgmt_count, (
+            f"fin-mgmt 加载数 {len(qs_fin)} != live {live_fin_mgmt_count}"
+        )
+
+        # corp-strat 过滤 — Phase 1.5.5 注入 20,Phase 2-Lane-C rerun 后变 63
+        assembler_corp = PaperAssembler(db, subject="corp-strat")
+        qs_corp = await assembler_corp._load_questions()
+        # 断言:全部题都是 corp-strat(过滤隔离有效)
+        assert all(q.subject_id == "corp-strat" for q in qs_corp), (
+            f"corp-strat 过滤失败:含其他学科题 "
+            f"{[q.subject_id for q in qs_corp if q.subject_id != 'corp-strat'][:3]}"
+        )
+        assert len(qs_corp) == live_corp_strat_count, (
+            f"corp-strat 加载数 {len(qs_corp)} != live {live_corp_strat_count}"
+        )
+        assert len(qs_corp) >= 1, (
+            f"corp-strat 至少 1 题(隔离有效),实际 {len(qs_corp)}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_paper_assembler_subject_none_loads_all():
+    """fix-23a legacy 兼容:PaperAssembler(subject=None) 读全部题。
+
+    ponytail: 老调用方 / 现有 12 paper_assembler 测试不传 subject,
+    应保持原有行为(load all questions,无 where 过滤)。
+    """
+    factory = get_session_factory()
+    async with factory() as db:
+        assembler = PaperAssembler(db, subject=None)
+        qs = await assembler._load_questions()
+        # 应至少含 fin-mgmt 的题
+        assert any(q.subject_id == "fin-mgmt" for q in qs)
+        # 应含多个 subject_id
+        subjects = {q.subject_id for q in qs}
+        assert "fin-mgmt" in subjects
+
+
+@pytest.mark.asyncio
+async def test_assemble_paper_async_corp_strat_returns_correct_size(
+    live_corp_strat_count: int,
+):
+    """fix-23a P0:assemble_paper_async(subject='corp-strat') 不抛错。
+
+    Phase 2-final dynamic:根据 live_corp_strat_count 决定 partial/full 行为。
+    - partial (live < 41): returned == live_corp_strat_count, partial=True
+    - full (live ≥ 41): returned == 41, partial=False
+    """
+    paper = await assemble_paper_async(
+        subject="corp-strat",
+        paper_spec=build_default_spec(),
+        mode="standard",
+    )
+    # Paper 对象(新格式)
+    assert hasattr(paper, "questions")
+    assert hasattr(paper, "partial")
+    assert paper.requested == 41
+    # partial vs full 分支断言
+    if live_corp_strat_count < paper.requested:
+        assert paper.partial is True
+        assert paper.returned == live_corp_strat_count
+    else:
+        assert paper.partial is False
+        assert paper.returned == paper.requested
+    assert len(paper.questions) == paper.returned
+    # 所有题来自 corp-strat(学科隔离)
+    factory = get_session_factory()
+    async with factory() as db:
+        from sqlalchemy import select
+
+        from app.models.question import Question
+
+        ids = [q["question_id"] for q in paper.questions]
+        if ids:
+            result = await db.execute(
+                select(Question.subject_id).where(Question.id.in_(ids))
+            )
+            subjects = {row[0] for row in result.all()}
+            assert subjects == {"corp-strat"}, f"学科隔离失败:{subjects}"
+
+
+@pytest.mark.asyncio
+async def test_assemble_paper_async_fin_mgmt_returns_41():
+    """fix-23a 回归:assemble_paper_async(subject='fin-mgmt') 行为不变(41 题)。
+
+    fix-23a P0 critical:现在返回 Paper 对象,paper.questions 是 list[dict](raw)。
+    """
+    paper = await assemble_paper_async(
+        subject="fin-mgmt",
+        paper_spec=build_default_spec(),
+        mode="standard",
+    )
+    # Paper 对象 — partial=False(题库充足),returned=41
+    assert paper.partial is False
+    assert paper.returned == 41
+    assert paper.requested == 41
+    assert len(paper.questions) == 41, f"期望 41 题,实际 {len(paper.questions)}"
+    # 所有题都来自 fin-mgmt
+    ids = [p["question_id"] for p in paper.questions]
+    factory = get_session_factory()
+    async with factory() as db:
+        from sqlalchemy import select
+
+        from app.models.question import Question
+
+        result = await db.execute(
+            select(Question.subject_id).where(Question.id.in_(ids))
+        )
+        subjects = {row[0] for row in result.all()}
+        assert subjects == {"fin-mgmt"}, f"学科隔离失败:{subjects}"
+
+
+@pytest.mark.asyncio
 async def test_mixed_assemble_paper_async_standard_unchanged():
-    """assemble_paper_async(mode='standard') 行为等同旧 assemble()(回归保护)。"""
+    """assemble_paper_async(mode='standard') 行为等同旧 assemble()(回归保护)。
+
+    fix-23a P0 critical:Paper 对象,题目在 paper.questions(raw dict)。
+    Phase 2-final:旧 + 新都用 subject='fin-mgmt'(避免全题库含 corp-strat new types)。
+    """
     factory = get_session_factory()
     async with factory() as session:
         rng = random.Random(7)
-        old = PaperAssembler(session, rng=rng, spec=build_default_spec())
+        # Phase 2-final:旧测试不指定 subject → load all questions
+        # 之前 fin-mgmt 没 comprehensive,2 comp slots fallback to calc → 6 calc total
+        # 但加了 corp-strat 后 all-questions 模式有 comprehensive,fallback 不触发
+        # 改用 subject='fin-mgmt' 显式过滤,与新入口对齐
+        old = PaperAssembler(session, rng=rng, spec=build_default_spec(), subject="fin-mgmt")
         old_paper = await old.assemble()
         # 新入口:复用同一 spec,对比
         # 注意:assemble_paper_async 自己开 session,这里 seed 不可控,
@@ -312,22 +464,27 @@ async def test_mixed_assemble_paper_async_standard_unchanged():
             paper_spec=build_default_spec(),
             mode="standard",
         )
-    assert len(new_paper) == len(old_paper)
-    assert sorted(p["type"] for p in new_paper) == sorted(
-        p["type"] for p in old_paper
+    assert len(new_paper.questions) == len(old_paper), (
+        f"新旧 length 不一致: old={len(old_paper)} new={len(new_paper.questions)}"
     )
+    assert sorted(p["type"] for p in new_paper.questions) == sorted(
+        p["type"] for p in old_paper
+    ), "新旧 type 分布不一致"
 
 
 @pytest.mark.asyncio
 async def test_mixed_assemble_paper_async_routing():
-    """assemble_paper_async 按 mode 路由:standard → 无 is_adapted;mixed → 可有。"""
+    """assemble_paper_async 按 mode 路由:standard → 无 is_adapted;mixed → 可有。
+
+    fix-23a P0 critical:Paper.questions 是 list[dict],用 dict 访问。
+    """
     # standard:不应有 is_adapted
     std = await assemble_paper_async(
         subject="fin-mgmt",
         paper_spec=build_default_spec(),
         mode="standard",
     )
-    assert all("is_adapted" not in q for q in std)
+    assert all("is_adapted" not in q for q in std.questions)
 
     # mixed + 不可用 client:fallback standard
     mixed_no_llm = await assemble_paper_async(
@@ -336,7 +493,7 @@ async def test_mixed_assemble_paper_async_routing():
         mode="mixed",
         deepseek_client=None,
     )
-    assert all("is_adapted" not in q for q in mixed_no_llm)
+    assert all("is_adapted" not in q for q in mixed_no_llm.questions)
 
     # mixed + 可用 client + 异常 LLM:fallback 原题(全数无 is_adapted)
     mixed_fail = await assemble_paper_async(
@@ -345,4 +502,4 @@ async def test_mixed_assemble_paper_async_routing():
         mode="mixed",
         deepseek_client=_FakeDeepSeek(raise_on_call=True),
     )
-    assert all("is_adapted" not in q for q in mixed_fail)
+    assert all("is_adapted" not in q for q in mixed_fail.questions)

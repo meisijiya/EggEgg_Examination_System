@@ -51,7 +51,7 @@ describe('startExam timeout 配置(fix-bug)', () => {
       headers: {},
       config: {} as never,
     });
-    await startExam('mixed');
+    await startExam('fin-mgmt', 'mixed');
     expect(spy).toHaveBeenCalledTimes(1);
     const [, , cfg] = spy.mock.calls[0];
     expect(cfg).toMatchObject({ timeout: 180_000 });
@@ -65,7 +65,7 @@ describe('startExam timeout 配置(fix-bug)', () => {
       headers: {},
       config: {} as never,
     });
-    await startExam('standard');
+    await startExam('fin-mgmt', 'standard');
     const [, , cfg] = spy.mock.calls[0];
     expect(cfg).toMatchObject({ timeout: 15_000 });
   });
@@ -78,12 +78,12 @@ describe('startExam timeout 配置(fix-bug)', () => {
       headers: {},
       config: {} as never,
     });
-    await startExam();
+    await startExam('fin-mgmt');
     const [, , cfg] = spy.mock.calls[0];
     expect(cfg).toMatchObject({ timeout: 15_000 });
   });
 
-  it('请求 body 含 mode 字段', async () => {
+  it('请求 body 含 subject_id + mode 字段(fix-30a)', async () => {
     const spy = vi.spyOn(client, 'post').mockResolvedValue({
       data: makeFakeStart(),
       status: 201,
@@ -91,9 +91,9 @@ describe('startExam timeout 配置(fix-bug)', () => {
       headers: {},
       config: {} as never,
     });
-    await startExam('mixed');
+    await startExam('fin-mgmt', 'mixed');
     const [, body] = spy.mock.calls[0];
-    expect(body).toEqual({ mode: 'mixed' });
+    expect(body).toEqual({ subject_id: 'fin-mgmt', mode: 'mixed' });
   });
 });
 

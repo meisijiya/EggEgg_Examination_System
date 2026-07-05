@@ -9,10 +9,19 @@
  *  - 提交 → POST /admin/review/questions/{id}
  */
 import { computed, onMounted, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { getReviewQueue, updateQuestion } from '@/api';
+import {
+  getAiGeneratedQuestions,
+  approveQuestion,
+  rejectQuestion,
+} from '@/api/subjects';
 import { useAuthStore } from '@/stores/auth';
-import type { ReviewQueueItem, ReviewUpdateRequest } from '@/types/api';
+import type {
+  ReviewQueueItem,
+  ReviewUpdateRequest,
+  AiGeneratedQuestion,
+} from '@/types/api';
 
 const auth = useAuthStore();
 
@@ -24,6 +33,15 @@ const editing = ref<ReviewQueueItem | null>(null);
 const editDialogVisible = ref<boolean>(false);
 const editForm = ref<ReviewUpdateRequest>({});
 const saving = ref<boolean>(false);
+
+/** 当前激活的 tab:'review' = 原题目 review,'ai-generated' = fix-30a AI 出题审核。 */
+const activeTab = ref<'review' | 'ai-generated'>('review');
+
+/** fix-30a:AI 生成题 review queue 状态。 */
+const aiQuestions = ref<AiGeneratedQuestion[]>([]);
+const aiLoading = ref<boolean>(false);
+/** 用户硬约束:source_ref 折叠栏默认收起(逐条 id 控制展开态)。 */
+const expandedAiRows = ref<number[]>([]);
 
 const isAdmin = computed(() => auth.isAdmin);
 
@@ -67,6 +85,75 @@ async function loadQueue(): Promise<void> {
     ElMessage.error(msg);
   } finally {
     loading.value = false;
+  }
+}
+
+/**
+ * fix-30a:加载 AI 生成题 review queue。
+ */
+async function loadAiQuestions(): Promise<void> {
+  aiLoading.value = true;
+  try {
+    const r = await getAiGeneratedQuestions();
+    aiQuestions.value = r.items;
+  } catch (e) {
+    const msg = (e as { message?: string })?.message ?? '加载 AI 题失败';
+    ElMessage.error(msg);
+  } finally {
+    aiLoading.value = false;
+  }
+}
+
+/**
+ * fix-30a:批准一条 AI 生成题。
+ */
+async function onApproveAi(qid: number): Promise<void> {
+  try {
+    await approveQuestion(qid);
+    ElMessage.success(`已批准题目 #${qid}`);
+    aiQuestions.value = aiQuestions.value.filter((q) => q.id !== qid);
+  } catch (e) {
+    ElMessage.error((e as { message?: string })?.message ?? '批准失败');
+  }
+}
+
+/**
+ * fix-30a:拒绝一条 AI 生成题 — 弹窗输入原因。
+ */
+async function onRejectAi(qid: number): Promise<void> {
+  try {
+    const { value: reason } = await ElMessageBox.prompt(
+      '请输入拒绝原因（学员可见，用于复盘）',
+      `拒绝题目 #${qid}`,
+      {
+        confirmButtonText: '确认拒绝',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '例：关键要点缺失；引用资料错位；题目重复...',
+        inputValidator: (val: string) => {
+          if (!val || val.trim().length < 4) return '请输入至少 4 个字符';
+          return true;
+        },
+      },
+    );
+    await rejectQuestion(qid, reason.trim());
+    ElMessage.success(`已拒绝题目 #${qid}`);
+    aiQuestions.value = aiQuestions.value.filter((q) => q.id !== qid);
+  } catch (e) {
+    // 用户取消 = 静默;网络错误 = 提示
+    if ((e as { message?: string })?.message) {
+      ElMessage.error((e as { message?: string }).message ?? '拒绝失败');
+    }
+  }
+}
+
+/**
+ * fix-30a:切换 tab 时按需懒加载。
+ */
+function onTabChange(name: string | number | undefined): void {
+  const tab = String(name);
+  if (tab === 'ai-generated' && aiQuestions.value.length === 0 && !aiLoading.value) {
+    loadAiQuestions();
   }
 }
 
@@ -118,6 +205,20 @@ function handleLogout(): void {
   auth.logout();
   queue.value = [];
 }
+
+/**
+ * 测试钩子 — 暴露内部状态给 vitest,避免依赖 DOM 触发 tab-change 事件。
+ * 生产代码不依赖。
+ */
+defineExpose({
+  activeTab,
+  aiQuestions,
+  expandedAiRows,
+  onApproveAi,
+  onRejectAi,
+  onTabChange,
+  loadAiQuestions,
+});
 </script>
 
 <template>
@@ -153,55 +254,154 @@ function handleLogout(): void {
       </el-card>
     </div>
 
-    <!-- 已登录：review queue -->
+    <!-- 已登录：review queue + AI 生成题审核（fix-30a tabs） -->
     <div v-else>
       <div class="admin-header">
         <h1>🛠️ 题目 Review</h1>
         <div class="admin-actions">
-          <el-tag type="warning" size="large">
-            待 review: {{ queue.length }} 题
-          </el-tag>
-          <el-button @click="loadQueue" :loading="loading">🔄 刷新</el-button>
           <el-button type="danger" plain @click="handleLogout">退出</el-button>
         </div>
       </div>
 
-      <div v-if="queue.length === 0 && !loading" class="empty-state">
-        🎉 题目库无风险项，无需 review
-      </div>
-
-      <el-table v-else :data="queue" stripe>
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="type" label="题型" width="100" />
-        <el-table-column prop="chapter_code" label="章节" width="100" />
-        <el-table-column prop="difficulty" label="难度" width="80" />
-        <el-table-column label="风险标签" width="240">
-          <template #default="{ row }">
-            <el-tag
-              v-for="f in row.flags"
-              :key="f"
-              type="danger"
-              size="small"
-              style="margin-right: 4px; margin-bottom: 4px;"
-            >
-              {{ f }}
+      <el-tabs v-model="activeTab" class="admin-tabs" @tab-change="onTabChange">
+        <!-- Tab 1：原题目 review -->
+        <el-tab-pane label="原题库 review" name="review">
+          <div class="tab-actions">
+            <el-tag type="warning" size="large">
+              待 review: {{ queue.length }} 题
             </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="题干">
-          <template #default="{ row }">
-            <div class="stem-cell">{{ row.stem }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="answer" label="答案" width="80" />
-        <el-table-column label="操作" width="120">
-          <template #default="{ row }">
-            <el-button size="small" type="primary" @click="openEdit(row)">
-              修正
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+            <el-button @click="loadQueue" :loading="loading">🔄 刷新</el-button>
+          </div>
+
+          <div v-if="queue.length === 0 && !loading" class="empty-state">
+            🎉 题目库无风险项，无需 review
+          </div>
+
+          <el-table v-else :data="queue" stripe>
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="type" label="题型" width="100" />
+            <el-table-column prop="chapter_code" label="章节" width="100" />
+            <el-table-column prop="difficulty" label="难度" width="80" />
+            <el-table-column label="风险标签" width="240">
+              <template #default="{ row }">
+                <el-tag
+                  v-for="f in row.flags"
+                  :key="f"
+                  type="danger"
+                  size="small"
+                  style="margin-right: 4px; margin-bottom: 4px;"
+                >
+                  {{ f }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="题干">
+              <template #default="{ row }">
+                <div class="stem-cell">{{ row.stem }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="answer" label="答案" width="80" />
+            <el-table-column label="操作" width="120">
+              <template #default="{ row }">
+                <el-button size="small" type="primary" @click="openEdit(row)">
+                  修正
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- Tab 2：AI 生成题审核（fix-30a） -->
+        <el-tab-pane label="AI 生成题 review" name="ai-generated">
+          <div class="tab-actions">
+            <el-tag type="info" size="large">
+              待审核: {{ aiQuestions.length }} 题
+            </el-tag>
+            <el-button @click="loadAiQuestions" :loading="aiLoading">🔄 刷新</el-button>
+          </div>
+
+          <div v-if="aiQuestions.length === 0 && !aiLoading" class="empty-state">
+            🎉 暂无 AI 待审核题目
+          </div>
+
+          <el-table
+            v-else
+            :data="aiQuestions"
+            stripe
+            :expand-row-keys="expandedAiRows"
+            row-key="id"
+            @expand-change="(rows: AiGeneratedQuestion[]) => (expandedAiRows = rows.map((r) => r.id))"
+          >
+            <el-table-column type="expand">
+              <template #default="{ row }">
+                <div class="ai-expand">
+                  <h4>📎 来源资料引用</h4>
+                  <p class="src-meta">
+                    <strong>{{ row.source_ref.file }}</strong> ·
+                    第 {{ row.source_ref.paragraph_index }} 段
+                  </p>
+                  <blockquote class="src-snippet">
+                    {{ row.source_ref.snippet }}
+                  </blockquote>
+                  <template v-if="row.agent_trace?.length">
+                    <h4>🧠 Agent Pipeline Trace</h4>
+                    <ul class="agent-trace">
+                      <li v-for="(t, i) in row.agent_trace" :key="i">
+                        <strong>{{ t.agent }}:</strong> {{ t.output }}
+                      </li>
+                    </ul>
+                  </template>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="subject_id" label="科目" width="120" />
+            <el-table-column prop="type" label="题型" width="100" />
+            <el-table-column prop="chapter_code" label="章节" width="100" />
+            <el-table-column prop="difficulty" label="难度" width="80" />
+            <el-table-column label="置信度" width="100">
+              <template #default="{ row }">
+                <el-progress
+                  :percentage="Math.round(row.confidence * 100)"
+                  :stroke-width="10"
+                  :color="row.confidence >= 0.8 ? 'var(--success)' : row.confidence >= 0.6 ? 'var(--warning)' : 'var(--danger)'"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="题干">
+              <template #default="{ row }">
+                <div class="stem-cell">{{ row.stem }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="AI 答案" width="120">
+              <template #default="{ row }">
+                <div class="answer-cell">{{ row.generated_answer }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="200" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  size="small"
+                  type="success"
+                  data-testid="ai-approve-btn"
+                  @click="onApproveAi(row.id)"
+                >
+                  ✓ 批准
+                </el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  plain
+                  data-testid="ai-reject-btn"
+                  @click="onRejectAi(row.id)"
+                >
+                  ✗ 拒绝
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <!-- Edit Dialog -->
@@ -331,5 +531,76 @@ function handleLogout(): void {
   background: var(--surface-2);
   color: var(--fg-2);
   font-weight: var(--fw-semibold);
+}
+
+/* fix-30a：admin tabs + AI 生成题 review 样式 */
+.admin-tabs {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: var(--s-4) var(--s-5);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+}
+.admin-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--s-4);
+}
+.admin-tabs :deep(.el-tabs__item) {
+  font: var(--fw-medium) var(--fs-body-lg) / 1 var(--font-display);
+}
+.admin-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--sky-active);
+}
+.tab-actions {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+  margin-bottom: var(--s-3);
+}
+.ai-expand {
+  background: var(--surface-2);
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-md);
+  margin: var(--s-2) 0;
+}
+.ai-expand h4 {
+  margin: var(--s-3) 0 var(--s-2);
+  font: var(--fw-semibold) var(--fs-body) / 1 var(--font-display);
+  color: var(--fg);
+}
+.ai-expand h4:first-child {
+  margin-top: 0;
+}
+.src-meta {
+  font-size: var(--fs-caption);
+  color: var(--muted);
+  margin: 0 0 var(--s-2);
+}
+.src-snippet {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface);
+  border-left: 3px solid var(--sky);
+  border-radius: var(--r-sm);
+  font: var(--fw-regular) var(--fs-body) / 1.6 var(--font-display);
+  color: var(--fg-2);
+  white-space: pre-wrap;
+}
+.agent-trace {
+  margin: 0;
+  padding-left: var(--s-5);
+  font-size: var(--fs-body);
+  color: var(--fg-2);
+}
+.agent-trace li {
+  margin-bottom: var(--s-2);
+}
+.answer-cell {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--fg-2);
 }
 </style>
