@@ -42,13 +42,12 @@ const subjects = ref<Subject[]>([]);
 const selectedId = ref<string>(props.modelValue?.id ?? '');
 
 /**
- * Phase 5 fix-4: 单科目时改为静态标签(非禁用 dropdown)。
+ * Phase 5 fix-4 + fix-7: 单科目时静态标签, 多科目时 el-select dropdown。
  *
- * 原因:后端 /api/subjects 端点未实现,listSubjects 兜底永远返回 1 个科目,
- * 此时 :disabled 让 dropdown 灰态,用户误以为是 UI 坏;改成 el-tag 静态显示
- * 后,用户清楚看到"当前可选:财务管理"且无切换入口。
- *
- * 多科目时(el-select 路径)保持原 dropdown 行为不变。
+ * fix-4: 当后端未就绪时 listSubjects 兜底返回 1 个科目 → 显示静态 label
+ *        而非禁用 dropdown, 避免用户误以为是 UI 坏了。
+ * fix-7: 后端 /subjects 端点已实现(0ab373e), 多科目时正常渲染 el-select,
+ *        单科目时仍静态 label(无切换必要)。
  */
 const showAsLabel = computed<boolean>(() => subjects.value.length <= 1);
 

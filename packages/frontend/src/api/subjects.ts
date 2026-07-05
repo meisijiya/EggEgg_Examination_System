@@ -1,14 +1,13 @@
 /**
- * 科目 + Admin review queue API 客户端 — fix-30a。
+ * 科目 + Admin review queue API 客户端 — fix-30a + Phase 5 fix-7。
  *
- * 后端占位 endpoint:
- * - GET  /api/subjects                          → listSubjects()
- * - GET  /api/admin/ai-generated-questions      → getAiGeneratedQuestions()
- * - POST /api/admin/approve-question/{qid}      → approveQuestion()
- * - POST /api/admin/reject-question/{qid}       → rejectQuestion()
+ * 端点:
+ * - GET  /subjects                              → listSubjects()
+ * - GET  /admin/ai-generated-questions           → getAiGeneratedQuestions()
+ * - POST /admin/approve-question/{qid}           → approveQuestion()
+ * - POST /admin/reject-question/{qid}            → rejectQuestion()
  *
- * 后端未就绪时 listSubjects 仍要可用 — catch 异常并 fallback 到单一财务科目,
- * 让前端在缺后端时也能跑通(用户硬约束:切换流程能在缺后端时跑通)。
+ * Phase 5 fix-7: 后端 /subjects 端点已实现, catch 兜底保留以防极端网络故障。
  */
 import client from './client';
 import type {
@@ -32,7 +31,7 @@ export async function listSubjects(): Promise<Subject[]> {
     if (Array.isArray(data) && data.length > 0) return data;
     return [{ id: 'fin-mgmt', name: '财务管理', question_count: 0 }];
   } catch {
-    // ponytail: 后端 fix-30a 还未实现时的兜底 — 不抛错,UI 仍可工作
+    // ponytail: 极端网络故障时兜底 — 不抛错,UI 仍可工作
     return [{ id: 'fin-mgmt', name: '财务管理', question_count: 0 }];
   }
 }

@@ -200,6 +200,12 @@ location / {
 |---|---|---|
 | `GET` | `/dashboard` | 历次成绩 + 趋势 + 章节雷达 |
 
+### 科目（user JWT）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/subjects` | 返回所有已发布科目（id + name + question_count） |
+
 ### 题目 Review（admin JWT）
 
 | 方法 | 路径 | 说明 |
@@ -220,7 +226,7 @@ location / {
 
 ### 1. 双数据库
 
-- **题库 `data/final/finance.db`**（只读）：由 preprocessor 写入，含 565 题（9 章 × 4 题型）
+- **题库 `data/final/finance.db`**（只读）：由 preprocessor 写入，含 628 题（财务管理 565 + 公司战略和风险管理 63，共 2 科目 × 7 题型）
 - **应用库 `data/app.db`**（读写）：存 exam_attempts + attempt_answers（Alembic 管理）
 
 两库物理隔离，跨库 JOIN 不可能；运行时用两次查询 + Python 端关联。

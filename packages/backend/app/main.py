@@ -2,11 +2,13 @@
 
 路由：
 - POST /auth/login
+- GET  /subjects
 - POST /exams/start, GET /exams/{id}, POST /exams/{id}/submit, GET /exams/{id}/result
 - DELETE /exams/{id}  （fix-22 新增）
 - POST /exams/{id}/explain
 - GET /dashboard
 - GET /admin/review/queue, POST /admin/review/questions/{id}
+- GET /admin/ai-generated-questions, POST /admin/approve-question/{qid}, POST /admin/reject-question/{qid}
 - GET /health
 - GET /               — SPA 入口（开发期由 packages/frontend/dist 服务）
 - GET /assets/*       — 静态资源托管（开发期同上）

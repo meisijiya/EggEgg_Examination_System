@@ -70,7 +70,7 @@
 | Subject ID | 中文名 | 题目量 | 状态 |
 |---|---|---|---|
 | `fin-mgmt` | 财务管理 | 565 | ✅ 部署运行 |
-| `corp-strat` | 公司战略和风险管理 | ~20(扩展中) | 🟡 multi-agent 跑批中 |
+| `corp-strat` | 公司战略和风险管理 | 63 | ✅ 部署运行(Phase 5 fix-7: /subjects endpoint 已就绪) |
 
 **新科目 checklist**:
 - [ ] parse 适配新目录 + chapter 白名单
